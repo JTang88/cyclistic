@@ -486,5 +486,45 @@ nrow(improved_dec2)
 # Re-assign the improved data to trips
 trips <- improved
 
+# Finally, calculate displacement distance and append to 'trips'
+
+# Create function to calculate distance between coordinates
+haversine_distance <- function(start_lat, start_lng, end_lat, end_lng) {
+  # Radius of the Earth in kilometers
+  R <- 6371.0
+  
+  # Convert degrees to radians
+  deg2rad <- function(deg) {
+    return(deg * pi / 180)
+  }
+  
+  start_lat <- deg2rad(start_lat)
+  start_lng <- deg2rad(start_lng)
+  end_lat <- deg2rad(end_lat)
+  end_lng <- deg2rad(end_lng)
+  
+  # Differences in coordinates
+  d_lat <- end_lat - start_lat
+  d_lng <- end_lng - start_lng
+  
+  # Haversine formula
+  a <- sin(d_lat / 2)^2 + cos(start_lat) * cos(end_lat) * sin(d_lng / 2)^2
+  c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+  
+  # Distance in kilometers
+  distance <- R * c
+  
+  return(distance)
+}
+
+# Create and add displacement distance `disp_distance` column to data
+trips <- trips %>%
+  mutate(disp_distance = haversine_distance(start_lat, start_lng, end_lat, end_lng))
+
+
+
+
+
+
 
 
