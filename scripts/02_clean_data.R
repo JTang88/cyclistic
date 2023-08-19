@@ -361,9 +361,9 @@ View(end_stations)
 # Combine the two
 combined_stations <- bind_rows(start_stations, end_stations)
 
-# Keep only high precision coordinates (3 decimal places or higher)
+# Keep only high precision coordinates (5 decimal places or higher)
 combined_stations_precise <- combined_stations %>% 
-  filter(round(lat, 3) != lat & round(lng, 3) != lng)
+  filter(round(lat, 5) != lat & round(lng, 5) != lng)
 
 View(combined_stations_precise)
 
@@ -383,14 +383,14 @@ unique_stations <- distinct(combined_stations, station_name)
 
 # num of rows in precise_stations
 print(nrow(precise_stations))
-# 1382 records
+# 1375 records
 
-# num og row in unique_stations
+# num of row in unique_stations
 print(nrow(unique_stations))
 # 1855 records
 
-# 473 stations don't have the level of precision we are looking for. We'll delve
-# deeper into the records related to these 473 stations. 
+# 480 stations don't have the level of precision we are looking for. We'll delve
+# deeper into the records related to these 480 stations. 
 
 # Extract stations lacking precise coordinates
 only_on_unique_stations <- setdiff(
@@ -410,7 +410,7 @@ imprecise_coords_stations <- trips %>%
   )
 
 View(imprecise_coords_stations)
-# 8300 records shown, all but one are electric bike rides
+# 8350 records shown, all but one are electric bike rides
 
 # The only classic bike ride appears to have been returned to an incorrect station, 
 # given its end station name is "oh charging stx - test". This observation strengthens 
@@ -418,7 +418,7 @@ View(imprecise_coords_stations)
 
 # Next, we'll replace the less precise coordinates with the more accurate ones. 
 # Improving location accuracy for trips that started and ended at a Divvy station 
-# (comprising about 80% of our data) is pivotal. Our plan is to create a subset 
+# (comprising about 76% of our data) is pivotal. Our plan is to create a subset 
 # based on this criterion, and analyze it separately from the rest. This subset
 # will be pivotal for answering queries that necessitate high precision. 
 
@@ -479,9 +479,9 @@ nrow(before_improvement_dec2)
 # 1409224 records
 
 nrow(improved_dec2)
-# 1315086 records
+# 1315099 records
 
-# Coordinates on 94138 rows were improved in precision as a result
+# Coordinates on 94125 rows were improved in precision as a result
 
 # Re-assign the improved data to trips
 trips <- improved
@@ -520,8 +520,6 @@ haversine_distance <- function(start_lat, start_lng, end_lat, end_lng) {
 # Create and add displacement distance `disp_distance` column to data
 trips <- trips %>%
   mutate(disp_distance = haversine_distance(start_lat, start_lng, end_lat, end_lng))
-
-
 
 
 
