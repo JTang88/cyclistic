@@ -7,6 +7,9 @@ library(naniar)
 library(glue)
 library(ggplot2)
 library(patchwork)
+library(gridExtra)
+# combine in dplyr is masked as the result of loading gridExtra
+
 
 
 # ==============================================================================
@@ -519,7 +522,10 @@ haversine_distance <- function(start_lat, start_lng, end_lat, end_lng) {
 
 # Create and add displacement distance `disp_distance` column to data
 trips <- trips %>%
-  mutate(disp_distance = haversine_distance(start_lat, start_lng, end_lat, end_lng))
+  mutate(
+    disp_distance = haversine_distance(start_lat, start_lng, end_lat, end_lng),
+    date = as.Date(started_at)
+  )
 
 
 
