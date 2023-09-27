@@ -104,19 +104,37 @@ avg_daily_totals_by_wday <- daily_totals_by_wday %>%
 print(avg_daily_totals_by_wday)
 
 # Visualize avg_duration_by_wday
-avg_duration_by_wday_plot <- ggplot(avg_duration_by_wday, aes(x = weekday, y = trip_duration, color = member_casual)) +
+avg_duration_by_wday_plot <- ggplot(
+    avg_duration_by_wday,
+    aes(x = weekday, y = trip_duration, color = member_casual)
+  ) + 
   geom_point(size = 3) +
-  geom_line(aes(group = member_casual, linetype = member_casual), size = 1) +
-  labs(title = "Average Trip Duration by Weekday", y = "Trip Duration", x = "Weekday") +
+  geom_line(
+    aes(group = member_casual, linetype = member_casual),
+    size = 1
+  ) +
+  labs(
+    title = "Average Trip Duration by Weekday",
+    y = "Trip Duration",
+    x = "Weekday"
+  ) +
   theme_minimal()
 
 # Visualize avg_daily_totals_by_wday
-avg_daily_totals_by_wday_plot <- ggplot(avg_daily_totals_by_wday, aes(x = weekday, y = avg_trip_duration, group = member_casual, color = member_casual)) +
-  geom_line(aes(linetype = member_casual), size = 1) +
+avg_daily_totals_by_wday_plot <- ggplot(
+    avg_daily_totals_by_wday,
+    aes(x = weekday, y = avg_trip_duration, group = member_casual, color = member_casual)
+  ) +
+  geom_line(
+    aes(linetype = member_casual),
+    size = 1
+  ) +
   geom_point(size = 3) +
-  labs(title = "Average Daily Total Trip Duration by Weekday",
-       y = "Daily Total Trip Duration",
-       x = "Weekday") +
+  labs(
+    title = "Average Daily Total Trip Duration by Weekday",
+    y = "Daily Total Trip Duration",
+    x = "Weekday"
+  ) +
   theme_minimal()
 
 grid.arrange(avg_duration_by_wday_plot, avg_daily_totals_by_wday_plot, ncol=1)
@@ -124,7 +142,7 @@ grid.arrange(avg_duration_by_wday_plot, avg_daily_totals_by_wday_plot, ncol=1)
 
 
 # ------------------------------------------------------------------------------
-#            Casual vs. Member - Frequency Comparison
+#                 Casual vs. Member - Frequency Comparison
 # ------------------------------------------------------------------------------
 
 
