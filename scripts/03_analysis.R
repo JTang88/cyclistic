@@ -96,6 +96,8 @@ daily_totals_by_wday <- trips %>%
   group_by(member_casual, weekday, date) %>%  
   summarise(daily_trip_duration = sum(trip_duration, na.rm = TRUE)) 
 
+print(daily_totals_by_wday)
+
 # Compute the average total trip duration per weekday by user type
 avg_daily_totals_by_wday <- daily_totals_by_wday %>%
   group_by(member_casual, weekday) %>%
