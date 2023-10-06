@@ -142,6 +142,20 @@ avg_daily_totals_by_wday_plot <- ggplot(
 grid.arrange(avg_duration_by_wday_plot, avg_daily_totals_by_wday_plot, ncol=1)
 
 
+# Compute the total trip frequency per weekday by user type
+total_trip_count_by_wday <- trips %>% 
+  group_by(member_casual, weekday, date) %>%
+  summarise(trip_count = n())
+
+print(total_trip_count_by_wday)
+
+# Compute the average total trip count per weekday by user type
+avg_trip_count_by_wday <- total_trip_count_by_wday %>%
+  group_by(member_casual, weekday) %>%
+  summarise(avg_trip_count = mean(trip_count, na.rm = TRUE))
+
+print(avg_trip_count_by_wday)
+
 
 # ------------------------------------------------------------------------------
 #                 Casual vs. Member - Frequency Comparison
