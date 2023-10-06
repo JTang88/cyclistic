@@ -524,11 +524,11 @@ haversine_distance <- function(start_lat, start_lng, end_lat, end_lng) {
 trips <- trips %>%
   mutate(
     disp_distance = haversine_distance(start_lat, start_lng, end_lat, end_lng),
-    date = as.Date(started_at, TZ = "America/Chicago") 
+    date = as.Date(started_at, tz = "America/Chicago") 
   )
 
 
-
+backup_trips <- trips
 
 
 
