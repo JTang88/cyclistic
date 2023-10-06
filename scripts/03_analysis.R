@@ -10,7 +10,6 @@ library(patchwork)
 # ==============================================================================
 #                       Summary Statistics & Exploration
 # ==============================================================================
-View(trips)
 
 # Create Subsets for Comparison Analysis:
 

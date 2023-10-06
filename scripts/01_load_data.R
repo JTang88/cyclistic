@@ -82,14 +82,6 @@ read_and_convert_datetimes <- function(file) {
 # Combine all files, convert `started_at` and `ended_at` datatype on-the-fly
 trips <- map_df(file_names, read_and_convert_datetimes)
 
-# change time zone to central time
-trips <- trips %>%
-  mutate(
-    started_at = with_tz(started_at, "America/Chicago"),
-    ended_at = with_tz(ended_at, "America/Chicago")
-  )
-
-print(trips)
 
 
 
