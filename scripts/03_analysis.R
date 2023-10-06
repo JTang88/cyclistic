@@ -10,6 +10,7 @@ library(patchwork)
 # ==============================================================================
 #                       Summary Statistics & Exploration
 # ==============================================================================
+View(trips)
 
 # Create Subsets for Comparison Analysis:
 
@@ -155,6 +156,127 @@ avg_trip_count_by_wday <- total_trip_count_by_wday %>%
   summarise(avg_trip_count = mean(trip_count, na.rm = TRUE))
 
 print(avg_trip_count_by_wday)
+
+
+# Visualize avg_trip_count_by_wday
+avg_trip_count_by_wday_plot <- ggplot(
+  avg_trip_count_by_wday,
+  aes(x = weekday, y = avg_trip_count, group = member_casual, color = member_casual)
+) +
+  geom_line(
+    aes(linetype = member_casual),
+    size = 1
+  ) +
+  geom_point(size = 3) +
+  labs(
+    title = "Average Daily Trip Count by Weekday",
+    y = "Daily Total Trip Count",
+    x = "Weekday"
+  ) +
+  theme_minimal()
+
+grid.arrange(
+  avg_duration_by_wday_plot,
+  avg_daily_totals_by_wday_plot,
+  avg_trip_count_by_wday_plot,
+  ncol=1
+)
+
+# ------------------------------------------------------------------------------
+#                 Casual vs. Member - Hourly Comparison
+# ------------------------------------------------------------------------------
+
+# Average Duration:
+
+# Compute the average trip duration during the hour/time of the weekday
+avg_duration_by_hour_weekday <- trips %>%
+  group_by(member_casual, weekday, hour) %>%
+  summarise(avg_trip_duration = mean(trip_duration, na.rm = TRUE)) %>%
+  ungroup()
+
+# Visualize avg_duration_by_hour_weekday
+avg_duration_plot <- ggplot(avg_duration_by_hour_weekday, 
+                            aes(x = hour, y = avg_trip_duration, color = member_casual)) +
+  geom_line(aes(group = member_casual)) +  # or geom_point() if you prefer points
+  facet_wrap(~weekday, ncol = 7, scales = "free_x") +
+  labs(
+    title = "Average Trip Duration by Hour for Each Weekday",
+    x = "Hour",
+    y = "Average Trip Duration"
+  ) +
+  theme_minimal()
+
+print(avg_duration_plot)
+
+# Total Average Duration:  
+
+# Compute the total trip duration during the hour/time of the weekday
+total_duration_by_hour_weekday <- trips %>%
+  group_by(member_casual, weekday, hour, date) %>%
+  summarise(total_hourly_duration = sum(trip_duration, na.rm = TRUE))
+
+print(total_duration_by_hour_weekday)
+
+# Compute the average total trip duration during the hour/time of the weekday
+avg_duration_by_hour_weekday <- total_duration_by_hour_weekday %>%
+  group_by(member_casual, weekday, hour) %>%
+  summarise(avg_hourly_duration = mean(total_hourly_duration, na.rm = TRUE))
+
+print(avg_duration_by_hour_weekday)
+  
+# Visualize avg_duration_by_hour_weekday
+avg_duration_by_hour_weekday_plot <- ggplot(avg_duration_by_hour_weekday, 
+                            aes(x = hour, y = avg_hourly_duration, color = member_casual)) +
+  geom_line(aes(group = member_casual)) +  # or geom_point() if you prefer points
+  facet_wrap(~weekday, ncol = 7, scales = "free_x") +
+  labs(
+    title = "Average Total Duration by Hour for Each Weekday",
+    x = "Hour",
+    y = "Average Hourly Duration"
+  ) +
+  theme_minimal()
+
+print(avg_duration_by_hour_weekday_plot)
+
+# Average Trip Count:
+
+# Compute the total trip count during the hour/time of the weekday
+total_trip_count_by_hour_weekday <- trips %>%
+  group_by(member_casual, weekday, hour, date) %>%
+  summarise(total_hourly_trip_count = n())
+
+print(total_trip_count_by_hour_weekday)
+
+# Compute the average total trip count during the hour/time of the weekday
+avg_total_trip_count_by_hour_weekday <- total_trip_count_by_hour_weekday %>%
+  group_by(member_casual, weekday, hour) %>%
+  summarise(ave_total_hourly_trip_count = mean(total_hourly_trip_count, na.rm = TRUE))
+
+print(avg_total_trip_count_by_hour_weekday)
+
+# Visualize avg_total_trip_count_by_hour_weekday
+avg_total_trip_count_by_hour_weekday_plot <- ggplot(
+    avg_total_trip_count_by_hour_weekday, 
+    aes(x = hour, y = ave_total_hourly_trip_count, color = member_casual)
+  ) +
+  geom_line(aes(group = member_casual)) +  # or geom_point() if you prefer points
+  facet_wrap(~weekday, ncol = 7, scales = "free_x") +
+  labs(
+    title = "Average Daily Trip Count by Hour of the Weekday",
+    x = "Hour",
+    y = "Hourly Average Trip Count"
+  ) +
+  theme_minimal()
+
+print(avg_total_trip_count_by_hour_weekday_plot)
+
+
+grid.arrange(
+  avg_duration_plot,
+  avg_duration_by_hour_weekday_plot,
+  avg_total_trip_count_by_hour_weekday_plot,
+  ncol=1
+)
 
 
 # ------------------------------------------------------------------------------
