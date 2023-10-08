@@ -5,6 +5,10 @@ library(glue)
 library(ggplot2)
 library(patchwork)
 
+install.packages("sf")
+library(sf)
+
+
 # Objective: Identify different patterns between casual and members
 
 # ==============================================================================
@@ -279,8 +283,58 @@ grid.arrange(
 
 
 # ------------------------------------------------------------------------------
-#                 Casual vs. Member - Frequency Comparison
+#                Casual vs. Member - Location Based Analysis
 # ------------------------------------------------------------------------------
+
+# Define boundaries for Chicago area
+xlims <- c(-88, -87.4)  # Example longitudes for the city boundaries
+ylims <- c(41.6, 42.05)  # Example latitudes for the city boundaries
+
+# Filter `trips` based on the above boundries
+filtered_trips <- trips %>%
+  filter(
+    between(start_lng, xlims[1], xlims[2]) & 
+      between(start_lat, ylims[1], ylims[2]) & 
+      between(end_lng, xlims[1], xlims[2]) & 
+      between(end_lat, ylims[1], ylims[2])
+  )
+
+# function that, given variables, returns heatmap
+create_time_based_heatmap <- function(trips, wday, act_type, s_hr, e_hr) {
+  
+  processed_heatmap_data <- trips %>%
+    filter(weekday == wday & between(hour, s_hr, e_hr))
+  
+  column_lat <- ifelse(act_type == "start", "start_lat", "end_lat")
+  column_lng <- ifelse(act_type == "start", "start_lng", "end_lng")
+  
+  ggplot(processed_heatmap_data, aes_string(x = column_lng, y = column_lat)) +
+    geom_density_2d_filled(aes(fill = ..level..), show.legend = F) +
+    coord_sf(xlim = xlims, ylim = ylims) +
+    theme_minimal() +
+    labs(title = glue("{wday} trip {act_type} Heatmap from {s_hr} to {e_hr}"))
+}
+
+create_time_based_heatmap(filtered_trips, "Mon", "start", 5, 9)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # ------------------------------------------------------------------------------
