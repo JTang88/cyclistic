@@ -7,6 +7,8 @@ library(patchwork)
 
 install.packages("sf")
 library(sf)
+install.packages("ggmap")
+library(ggmap)
 
 
 # Objective: Identify different patterns between casual and members
@@ -286,9 +288,20 @@ grid.arrange(
 #                Casual vs. Member - Location Based Analysis
 # ------------------------------------------------------------------------------
 
-# Define boundaries for Chicago area
-xlims <- c(-88, -87.4)  # Example longitudes for the city boundaries
-ylims <- c(41.6, 42.05)  # Example latitudes for the city boundaries
+# Get Chicago city map
+chicago_map <- get_map(
+  location = 'Chicago',
+  zoom = 11,
+  maptype = "roadmap",
+  source = "google"
+)
+
+ggmap(chicago_map)
+
+# Getting the boundaries from chicago_map
+xlims <- c(attr(chicago_map, "bb")$ll.lon, attr(chicago_map, "bb")$ur.lon)
+ylims <- c(attr(chicago_map, "bb")$ll.lat, attr(chicago_map, "bb")$ur.lat)
+
 
 # Filter `trips` based on the above boundries
 filtered_trips <- trips %>%
@@ -299,23 +312,36 @@ filtered_trips <- trips %>%
       between(end_lat, ylims[1], ylims[2])
   )
 
+
 # function that, given variables, returns heatmap
-create_time_based_heatmap <- function(trips, wday, act_type, s_hr, e_hr) {
+create_time_based_heatmap <- function(trips, wday, act_type, s_hr, e_hr, rider_type, base_map) {
   
+  # Processed data
   processed_heatmap_data <- trips %>%
-    filter(weekday == wday & between(hour, s_hr, e_hr))
+    filter(weekday == wday & between(hour, s_hr, e_hr) & member_casual == rider_type)
   
+  # Decide which columns to use based on act_type
   column_lat <- ifelse(act_type == "start", "start_lat", "end_lat")
   column_lng <- ifelse(act_type == "start", "start_lng", "end_lng")
   
-  ggplot(processed_heatmap_data, aes_string(x = column_lng, y = column_lat)) +
-    geom_density_2d_filled(aes(fill = ..level..), show.legend = F) +
-    coord_sf(xlim = xlims, ylim = ylims) +
+  # Plot
+  p <- ggmap(base_map) + 
+    geom_density_2d_filled(
+      data = processed_heatmap_data, 
+      aes(x = !!sym(column_lng), y = !!sym(column_lat), fill = ..level..),
+      alpha = 0.7, 
+      show.legend = F
+    ) +
     theme_minimal() +
     labs(title = glue("{wday} trip {act_type} Heatmap from {s_hr} to {e_hr}"))
+  
+  return(p)
 }
 
-create_time_based_heatmap(filtered_trips, "Mon", "start", 5, 9)
+# Call the function
+create_time_based_heatmap(filtered_trips, "Mon", "start", 5, 9, "member", chicago_map)
+
+
 
 
 
