@@ -1,13 +1,12 @@
+install.packages("sf")
+install.packages("ggmap")
 library(tidyverse)
 library(skimr)
 library(naniar)
 library(glue)
 library(ggplot2)
 library(patchwork)
-
-install.packages("sf")
 library(sf)
-install.packages("ggmap")
 library(ggmap)
 
 
@@ -289,18 +288,18 @@ grid.arrange(
 # ------------------------------------------------------------------------------
 
 # Get Chicago city map
-chicago_map <- get_map(
-  location = 'Chicago',
-  zoom = 11,
-  maptype = "roadmap",
-  source = "google"
+chicago_map <- get_stamenmap(
+  bbox = c(left = -87.9403, bottom = 41.6447, right = -87.5241, top = 42.0231),
+  zoom = 10,
+  maptype = "toner-lite"
 )
 
 ggmap(chicago_map)
 
-# Getting the boundaries from chicago_map
-xlims <- c(attr(chicago_map, "bb")$ll.lon, attr(chicago_map, "bb")$ur.lon)
-ylims <- c(attr(chicago_map, "bb")$ll.lat, attr(chicago_map, "bb")$ur.lat)
+
+# Setting the boundaries using the provided Chicago coordinates
+xlims <- c(-87.9403, -87.5241)  # West Longitude to East Longitude
+ylims <- c(41.6447, 42.0231)    # South Latitude to North Latitude
 
 
 # Filter `trips` based on the above boundries
@@ -325,13 +324,12 @@ create_time_based_heatmap <- function(trips, wday, act_type, s_hr, e_hr, rider_t
   column_lng <- ifelse(act_type == "start", "start_lng", "end_lng")
   
   # Plot
-  p <- ggmap(base_map) + 
-    geom_density_2d_filled(
-      data = processed_heatmap_data, 
-      aes(x = !!sym(column_lng), y = !!sym(column_lat), fill = ..level..),
-      alpha = 0.7, 
-      show.legend = F
-    ) +
+  p <- ggmap(base_map) +
+    stat_density2d(data=processed_heatmap_data, 
+                   aes_string(x = column_lng, y = column_lat, fill = "..level..", alpha = "..level.."), 
+                   geom = 'polygon') +
+    scale_fill_gradientn(colours=rev(rainbow(100, start=0, end=0.75))) +
+    scale_alpha_continuous(guide="none", range=c(0, 0.7)) +
     theme_minimal() +
     labs(title = glue("{wday} trip {act_type} Heatmap from {s_hr} to {e_hr}"))
   
@@ -339,7 +337,8 @@ create_time_based_heatmap <- function(trips, wday, act_type, s_hr, e_hr, rider_t
 }
 
 # Call the function
-create_time_based_heatmap(filtered_trips, "Mon", "start", 5, 9, "member", chicago_map)
+create_time_based_heatmap(filtered_trips, "Mon", "end", 17, 20, "member", chicago_map)
+
 
 
 
