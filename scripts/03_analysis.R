@@ -1,4 +1,5 @@
 install.packages("sf")
+install.packages("ggplot2")
 install.packages("ggmap")
 library(tidyverse)
 library(skimr)
@@ -336,8 +337,42 @@ create_time_based_heatmap <- function(trips, wday, act_type, s_hr, e_hr, rider_t
   return(p)
 }
 
-# Call the function
 create_time_based_heatmap(filtered_trips, "Mon", "end", 17, 20, "member", chicago_map)
+  
+heapmap_exporter <- function() {
+  
+  output_directory <- "/Users/jerrytang/Projects/cyclistic/viz" 
+  
+  # Define the parameters you want to change for each heatmap
+  days <- c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+  act_types <- c("starts", "end")
+  time_starts <- c(5, 9, 12, 14, 17, 20)
+  time_ends <- c(9, 12, 14, 17, 20, 24)
+  types <- c("member", "casual")  
+  
+  # Loop through each combination of parameters
+  for(day in days) {
+    for(act_type in act_types) {
+      for(i in seq_along(time_starts)) {
+        for(type in types) {
+          
+          # Generate the heatmap
+          p <- create_time_based_heatmap(filtered_trips, day, act_type, time_starts[i], time_ends[i], type, chicago_map)
+          
+          # Save the heatmap
+          file_name <- paste(output_directory, 
+                             sprintf("heatmap_%s_%02d_%02d_%s.png", day, time_starts[i], time_ends[i], type), 
+                             sep="/")
+          
+          ggsave(filename = file_name, plot = p, device = "png")
+        }
+      }
+    }
+  }
+}
+
+
+heapmap_exporter()
 
 
 
