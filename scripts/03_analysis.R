@@ -1,17 +1,5 @@
-install.packages("sf")
-install.packages("ggplot2")
-install.packages("ggmap")
-library(tidyverse)
-library(skimr)
-library(naniar)
-library(glue)
-library(ggplot2)
-library(patchwork)
-library(sf)
-library(ggmap)
-
-
-# Objective: Identify different patterns between casual and members
+# Import `trips_cleaned` 
+trips <- import_trips_factorize_variables("data/processed/trips_cleaned.csv")
 
 # ==============================================================================
 #                       Summary Statistics & Exploration
@@ -97,19 +85,14 @@ med_duration_by_wday <- trips %>%
 
 print(med_duration_by_wday)
 
-# Compute the total trip duration for each day by user type and weekday
-daily_totals_by_wday <- trips %>%
+# Compute the average total trip duration by weekday and user type
+avg_total_duration_by_wday <- trips %>% 
   group_by(member_casual, weekday, date) %>%  
-  summarise(daily_trip_duration = sum(trip_duration, na.rm = TRUE)) 
-
-print(daily_totals_by_wday)
-
-# Compute the average total trip duration per weekday by user type
-avg_daily_totals_by_wday <- daily_totals_by_wday %>%
+  summarise(daily_trip_duration = sum(trip_duration, na.rm = TRUE)) %>% 
   group_by(member_casual, weekday) %>%
   summarise(avg_trip_duration = mean(daily_trip_duration, na.rm = TRUE))
 
-print(avg_daily_totals_by_wday)
+print(avg_total_duration_by_wday)
 
 # Visualize avg_duration_by_wday
 avg_duration_by_wday_plot <- ggplot(
@@ -123,14 +106,14 @@ avg_duration_by_wday_plot <- ggplot(
   ) +
   labs(
     title = "Average Trip Duration by Weekday",
-    y = "Trip Duration",
+    y = "Average Trip Duration",
     x = "Weekday"
   ) +
   theme_minimal()
 
-# Visualize avg_daily_totals_by_wday
-avg_daily_totals_by_wday_plot <- ggplot(
-    avg_daily_totals_by_wday,
+# Visualize avg_total_daily_duration_by_wday
+avg_total_duration_by_wday_plot <- ggplot(
+    avg_total_duration_by_wday,
     aes(x = weekday, y = avg_trip_duration, group = member_casual, color = member_casual)
   ) +
   geom_line(
@@ -139,29 +122,20 @@ avg_daily_totals_by_wday_plot <- ggplot(
   ) +
   geom_point(size = 3) +
   labs(
-    title = "Average Daily Total Trip Duration by Weekday",
-    y = "Daily Total Trip Duration",
+    title = "Average Total Trip Duration by Weekday",
+    y = "Average Total Trip Duration",
     x = "Weekday"
   ) +
   theme_minimal()
 
-grid.arrange(avg_duration_by_wday_plot, avg_daily_totals_by_wday_plot, ncol=1)
-
-
-# Compute the total trip frequency per weekday by user type
-total_trip_count_by_wday <- trips %>% 
+# Compute the average total trip count by weekday and user type
+avg_trip_count_by_wday <- trips %>% 
   group_by(member_casual, weekday, date) %>%
-  summarise(trip_count = n())
-
-print(total_trip_count_by_wday)
-
-# Compute the average total trip count per weekday by user type
-avg_trip_count_by_wday <- total_trip_count_by_wday %>%
+  summarise(trip_count = n()) %>% 
   group_by(member_casual, weekday) %>%
   summarise(avg_trip_count = mean(trip_count, na.rm = TRUE))
 
 print(avg_trip_count_by_wday)
-
 
 # Visualize avg_trip_count_by_wday
 avg_trip_count_by_wday_plot <- ggplot(
@@ -174,15 +148,15 @@ avg_trip_count_by_wday_plot <- ggplot(
   ) +
   geom_point(size = 3) +
   labs(
-    title = "Average Daily Trip Count by Weekday",
-    y = "Daily Total Trip Count",
+    title = "Average Trip Count by Weekday",
+    y = "Average Trip Count",
     x = "Weekday"
   ) +
   theme_minimal()
 
 grid.arrange(
   avg_duration_by_wday_plot,
-  avg_daily_totals_by_wday_plot,
+  avg_total_duration_by_wday_plot,
   avg_trip_count_by_wday_plot,
   ncol=1
 )
@@ -193,14 +167,14 @@ grid.arrange(
 
 # Average Duration:
 
-# Compute the average trip duration during the hour/time of the weekday
+# Compute the average trip duration by hour for each weekday
 avg_duration_by_hour_weekday <- trips %>%
   group_by(member_casual, weekday, hour) %>%
   summarise(avg_trip_duration = mean(trip_duration, na.rm = TRUE)) %>%
   ungroup()
 
 # Visualize avg_duration_by_hour_weekday
-avg_duration_plot <- ggplot(avg_duration_by_hour_weekday, 
+avg_duration_by_hour_weekday_plot <- ggplot(avg_duration_by_hour_weekday, 
                             aes(x = hour, y = avg_trip_duration, color = member_casual)) +
   geom_line(aes(group = member_casual)) +  # or geom_point() if you prefer points
   facet_wrap(~weekday, ncol = 7, scales = "free_x") +
@@ -211,75 +185,65 @@ avg_duration_plot <- ggplot(avg_duration_by_hour_weekday,
   ) +
   theme_minimal()
 
-print(avg_duration_plot)
+print(avg_duration_by_hour_weekday_plot)
+
 
 # Total Average Duration:  
 
-# Compute the total trip duration during the hour/time of the weekday
-total_duration_by_hour_weekday <- trips %>%
-  group_by(member_casual, weekday, hour, date) %>%
-  summarise(total_hourly_duration = sum(trip_duration, na.rm = TRUE))
-
-print(total_duration_by_hour_weekday)
-
 # Compute the average total trip duration during the hour/time of the weekday
-avg_duration_by_hour_weekday <- total_duration_by_hour_weekday %>%
+avg_total_duration_by_hour_weekday <- trips %>%
+  group_by(member_casual, weekday, hour, date) %>%
+  summarise(total_hourly_duration = sum(trip_duration, na.rm = TRUE)) %>% 
   group_by(member_casual, weekday, hour) %>%
   summarise(avg_hourly_duration = mean(total_hourly_duration, na.rm = TRUE))
 
-print(avg_duration_by_hour_weekday)
+print(avg_total_duration_by_hour_weekday)
   
 # Visualize avg_duration_by_hour_weekday
-avg_duration_by_hour_weekday_plot <- ggplot(avg_duration_by_hour_weekday, 
+avg_total_duration_by_hour_weekday_plot <- ggplot(avg_total_duration_by_hour_weekday, 
                             aes(x = hour, y = avg_hourly_duration, color = member_casual)) +
   geom_line(aes(group = member_casual)) +  # or geom_point() if you prefer points
   facet_wrap(~weekday, ncol = 7, scales = "free_x") +
   labs(
     title = "Average Total Duration by Hour for Each Weekday",
     x = "Hour",
-    y = "Average Hourly Duration"
+    y = "Average Total Duration"
   ) +
   theme_minimal()
 
-print(avg_duration_by_hour_weekday_plot)
+print(avg_total_duration_by_hour_weekday_plot)
+
 
 # Average Trip Count:
 
-# Compute the total trip count during the hour/time of the weekday
-total_trip_count_by_hour_weekday <- trips %>%
-  group_by(member_casual, weekday, hour, date) %>%
-  summarise(total_hourly_trip_count = n())
-
-print(total_trip_count_by_hour_weekday)
-
 # Compute the average total trip count during the hour/time of the weekday
-avg_total_trip_count_by_hour_weekday <- total_trip_count_by_hour_weekday %>%
+avg_trip_count_by_hour_weekday <- trips %>%
+  group_by(member_casual, weekday, hour, date) %>%
+  summarise(trip_count_by_hour = n()) %>% 
   group_by(member_casual, weekday, hour) %>%
-  summarise(ave_total_hourly_trip_count = mean(total_hourly_trip_count, na.rm = TRUE))
-
-print(avg_total_trip_count_by_hour_weekday)
+  summarise(avg_trip_count_by_hour = mean(trip_count_by_hour, na.rm = TRUE))
 
 # Visualize avg_total_trip_count_by_hour_weekday
-avg_total_trip_count_by_hour_weekday_plot <- ggplot(
-    avg_total_trip_count_by_hour_weekday, 
-    aes(x = hour, y = ave_total_hourly_trip_count, color = member_casual)
+avg_trip_count_by_hour_weekday_plot <- ggplot(
+    avg_trip_count_by_hour_weekday, 
+    aes(x = hour, y = avg_trip_count_by_hour, color = member_casual)
   ) +
   geom_line(aes(group = member_casual)) +  # or geom_point() if you prefer points
   facet_wrap(~weekday, ncol = 7, scales = "free_x") +
   labs(
-    title = "Average Daily Trip Count by Hour of the Weekday",
+    title = "Average Trip Count by Hour for Each Weekday",
     x = "Hour",
-    y = "Hourly Average Trip Count"
+    y = "Average Trip Count"
   ) +
   theme_minimal()
 
-print(avg_total_trip_count_by_hour_weekday_plot)
+print(avg_trip_count_by_hour_weekday_plot)
 
 
 grid.arrange(
-  avg_duration_plot,
   avg_duration_by_hour_weekday_plot,
-  avg_total_trip_count_by_hour_weekday_plot,
+  avg_total_duration_by_hour_weekday_plot,
+  avg_trip_count_by_hour_weekday_plot,
   ncol=1
 )
 
@@ -289,18 +253,18 @@ grid.arrange(
 # ------------------------------------------------------------------------------
 
 # Get Chicago city map
-chicago_map <- get_stamenmap(
-  bbox = c(left = -87.9403, bottom = 41.6447, right = -87.5241, top = 42.0231),
-  zoom = 10,
-  maptype = "toner-lite"
+chicago_map <- get_map(
+  location = 'Chicago',
+  zoom = 11,
+  maptype = "roadmap",
+  source = "google"
 )
 
 ggmap(chicago_map)
 
-
-# Setting the boundaries using the provided Chicago coordinates
-xlims <- c(-87.9403, -87.5241)  # West Longitude to East Longitude
-ylims <- c(41.6447, 42.0231)    # South Latitude to North Latitude
+# Getting the boundaries from chicago_map
+xlims <- c(attr(chicago_map, "bb")$ll.lon, attr(chicago_map, "bb")$ur.lon)
+ylims <- c(attr(chicago_map, "bb")$ll.lat, attr(chicago_map, "bb")$ur.lat)
 
 
 # Filter `trips` based on the above boundries
@@ -312,6 +276,9 @@ filtered_trips <- trips %>%
       between(end_lat, ylims[1], ylims[2])
   )
 
+# ==============================================================================
+
+# Map Option 1
 
 # function that, given variables, returns heatmap
 create_time_based_heatmap <- function(trips, wday, act_type, s_hr, e_hr, rider_type, base_map) {
@@ -330,14 +297,52 @@ create_time_based_heatmap <- function(trips, wday, act_type, s_hr, e_hr, rider_t
                    aes_string(x = column_lng, y = column_lat, fill = "..level..", alpha = "..level.."), 
                    geom = 'polygon') +
     scale_fill_gradientn(colours=rev(rainbow(100, start=0, end=0.75))) +
-    scale_alpha_continuous(guide="none", range=c(0, 0.7)) +
+    scale_alpha_continuous(guide="none", range=c(0.2, 0.9)) +
     theme_minimal() +
     labs(title = glue("{wday} trip {act_type} Heatmap from {s_hr} to {e_hr}"))
   
   return(p)
 }
 
-create_time_based_heatmap(filtered_trips, "Mon", "end", 17, 20, "member", chicago_map)
+
+# Call the function
+create_time_based_heatmap(filtered_trips, "Mon", "start", 5, 9, "member", chicago_map)
+
+
+# ==============================================================================
+
+# Map Option 2
+
+# function that, given variables, returns heatmap
+create_time_based_heatmap <- function(trips, wday, act_type, s_hr, e_hr, rider_type, base_map) {
+  
+  # Processed data
+  processed_heatmap_data <- trips %>%
+    filter(weekday == wday & between(hour, s_hr, e_hr) & member_casual == rider_type)
+  
+  # Decide which columns to use based on act_type
+  column_lat <- ifelse(act_type == "start", "start_lat", "end_lat")
+  column_lng <- ifelse(act_type == "start", "start_lng", "end_lng")
+  
+  # Plot
+  p <- ggmap(base_map) + 
+    geom_density_2d_filled(
+      data = processed_heatmap_data, 
+      aes(x = !!sym(column_lng), y = !!sym(column_lat), fill = ..level..),
+      alpha = 0.7, 
+      show.legend = F
+    ) +
+    theme_minimal() +
+    labs(title = glue("{wday} trip {act_type} Heatmap from {s_hr} to {e_hr}"))
+  
+  return(p)
+}
+
+# Call the function
+create_time_based_heatmap(filtered_trips, "Mon", "start", 5, 9, "member", chicago_map)
+
+# ==============================================================================
+
   
 heapmap_exporter <- function() {
   

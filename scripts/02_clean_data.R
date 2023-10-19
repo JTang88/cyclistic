@@ -1,16 +1,5 @@
-# Load necessary packages
-install.packages("naniar")
-install.packages("patchwork")
-library(tidyverse)
-library(skimr)
-library(naniar)
-library(glue)
-library(ggplot2)
-library(patchwork)
-library(gridExtra)
-# combine in dplyr is masked as the result of loading gridExtra
-
-
+# Import `trips_combined` 
+trips <- read_csv("data/interim/trips_combined.csv")
 
 # ==============================================================================
 #                        Initial Exploration & Cleaning
@@ -20,7 +9,7 @@ skim(trips)
 View(trips)
 
 # Investigate incomplete cases
-incomplete_cases <- trips %>% 
+incomplete <- trips %>% 
   filter(!complete.cases(.))
 
 View(incomplete_cases)
@@ -106,20 +95,20 @@ trips <- trips %>%
 skim(trips)
 
 # Investigate NA in end coordinates cases
-end_coord_na <- trips %>% 
+missing_end_coord <- trips %>% 
   filter(is.na(end_lat) & is.na(end_lng))
 
-View(end_coord_na)
+View(missing_end_coord)
 
 # Remove trips with NA in end coordinates
 trips <- trips %>% 
   filter(!is.na(end_lat) & !is.na(end_lng))
 
-# Several abnormalities were observed in `end_coord_na`:
+# Several abnormalities were observed in `missing_end_coord`:
 # 1. Only classic bikes were present.
 # 2. The majority of the users were casual.
 # 3. Almost all of the bikes (more than 99%) were used for 1499 minutes or longer.
-# Based on these findings, we concluded that the records in `end_coord_na` represent
+# Based on these findings, we concluded that the records in `missing_end_coord` represent
 # trips where bikes were taken out of circulation. Given that there were only 3,118
 # such rows,they were not statistically significant for our analysis, so they were dropped.
 
@@ -141,7 +130,7 @@ trips <- trips %>%
 # Below, we will explore NAs in start station id and name of different ride types.  
 
 # Determine many classic ride records are missing both start station id and name
-classic_missing_name_id <- trips %>% 
+classic_missing_station <- trips %>% 
   filter(
     rideable_type == "classic_bike",
     trip_duration > 2,
@@ -149,11 +138,11 @@ classic_missing_name_id <- trips %>%
       is.na(end_station_id) & is.na(end_station_name)
   )
 
-View(classic_missing_name_id)
+View(classic_missing_station)
 # Only 71 records
 
 # Determine how many electric ride are missing both start station id and name
-electric_missing_name_id <- trips %>% 
+electric_missing_station <- trips %>% 
   filter(
     rideable_type == "electric_bike",
     trip_duration > 2,
@@ -161,7 +150,7 @@ electric_missing_name_id <- trips %>%
       is.na(end_station_id) & is.na(end_station_name),
   )
 
-View(electric_missing_name_id)
+View(electric_missing_station)
 # 1,262,053 records
 
 # Our hypothesis is confirmed: the flexible return options for electric bikes 
@@ -265,37 +254,37 @@ View(coords_dec2)
 # coordinates of varying precision levels.
 
 # Identify records with less precise end coordinates, excluding NA in station names
-imprecise_end_coord <- trips %>% 
+end_coord_imprecise <- trips %>% 
   filter(
     !is.na(end_station_name),
     round(end_lat, 2) == end_lat & round(end_lng, 2) == end_lng
   )
       
-View(imprecise_end_coord)
+View(end_coord_imprecise)
 
-# Select random `end_station_name` from `imprecise_end_coord` and check 
+# Select random `end_station_name` from `end_coord_imprecise` and check 
 # for more accurate coordinates under the same `start_station_name`.
 
 #Find precise coordinates for station elizabeth st & randolph st
-elizabeth_randolph_coords <- trips %>% 
+coords_elizabeth_randolph <- trips %>% 
   filter(start_station_name == "elizabeth st & randolph st") %>% 
   distinct(start_lat, start_lng, .keep_all = TRUE)
 
-View(elizabeth_randolph_coords)
+View(coords_elizabeth_randolph)
 
 #Find precise coordinates for station mulligan ave & wellington ave
-mulligan_wellington_coords <- trips %>% 
+coords_mulligan_wellington <- trips %>% 
   filter(start_station_name == "mulligan ave & wellington ave") %>% 
   distinct(start_lat, start_lng, .keep_all = TRUE)
 
-View(mulligan_wellington_coords)
+View(coords_mulligan_wellington)
 
 #Find precise coordinates for station lawndale ave & 30th st
-lawndale_ave_30th <- trips %>% 
+coord_lawndale_ave_30th <- trips %>% 
   filter(start_station_name == "lawndale ave & 30th st") %>% 
   distinct(start_lat, start_lng, .keep_all = TRUE)
 
-View(lawndale_ave_30th)
+View(coord_lawndale_ave_30th)
 
 # Precise coordinates were found for all three station names. This confirms our 
 # approach to replace less accurate coordinates during Further Cleaning.
@@ -362,57 +351,57 @@ end_stations <- trips %>%
 View(end_stations)
 
 # Combine the two
-combined_stations <- bind_rows(start_stations, end_stations)
+stations_combined <- bind_rows(start_stations, end_stations)
 
 # Keep only high precision coordinates (5 decimal places or higher)
-combined_stations_precise <- combined_stations %>% 
+stations_precise <- stations_combined %>% 
   filter(round(lat, 5) != lat & round(lng, 5) != lng)
 
-View(combined_stations_precise)
+View(stations_precise)
 
-# Keep only median coordinates value
-precise_stations <- combined_stations_precise %>% 
+# Keep only median coordinates value while removing duplicated stations
+stations_precise <- stations_precise %>% 
   group_by(station_name) %>% 
   summarise(med_lat = median(lat), med_lng = median(lng))
 
-View(precise_stations)
+View(stations_precise)
 
 # Investigate stations lacking precise median coordinates
 
 # Create a subset of all unique stations regardless of coordinate precision 
-unique_stations <- distinct(combined_stations, station_name)
+stations_unique <- distinct(stations_combined, station_name)
 
-# Get the difference in rows count between `precise_stations` and `unique_stations`
+# Get the difference in rows count between `stations_precise` and `stations_unique`
 
-# num of rows in precise_stations
-print(nrow(precise_stations))
+# stations_precise count
+print(nrow(stations_precise))
 # 1375 records
 
-# num of row in unique_stations
-print(nrow(unique_stations))
+# stations_unique count
+print(nrow(stations_unique))
 # 1855 records
 
 # 480 stations don't have the level of precision we are looking for. We'll delve
 # deeper into the records related to these 480 stations. 
 
-# Extract stations lacking precise coordinates
-only_on_unique_stations <- setdiff(
-  unique_stations$station_name,
-  precise_stations$station_name
+# Identify imprecise station by extracting what's not on `stations_precise`
+stations_only_on_unique <- setdiff(
+  stations_unique$station_name,
+  stations_precise$station_name
 )
-print(only_on_unique_stations)
+print(stations_only_on_unique)
 
 # Extract trips associated with stations lacking precise coordinates to further
 # inspect these records
 
 # Filter such rows from `trips`
-imprecise_coords_stations <- trips %>%
+stations_imprecise_coords <- trips %>%
   filter(
-    start_station_name %in% only_on_unique_stations | 
-     end_station_name %in% only_on_unique_stations
+    start_station_name %in% stations_only_on_unique | 
+     end_station_name %in% stations_only_on_unique
   )
 
-View(imprecise_coords_stations)
+View(stations_imprecise_coords)
 # 8350 records shown, all but one are electric bike rides
 
 # The only classic bike ride appears to have been returned to an incorrect station, 
@@ -460,39 +449,39 @@ improve_coords_precision <- function(data, station_coords) {
   return(complete_data)
 }
 
-improved <- improve_coords_precision(trips, precise_stations)
+improved <- improve_coords_precision(trips, stations_precise)
 
 View(improved)
 
 # Identify 2 decimal place coordinates on both sets and get a count
 
 # The filter set before improvement
-before_improvement_dec2 <- trips %>% 
+coords_before_improvement_dec2 <- trips %>% 
   filter(
     (!is.na(start_lat) | !is.na(end_lat)),
     (round(start_lat, 2) == start_lat & round(start_lng, 2) == start_lng) |
       (round(end_lat, 2) == end_lat & round(end_lng, 2) == end_lng)
   )  
 
-improved_dec2 <- improved %>%
+coords_improved_dec2 <- improved %>%
   filter((round(start_lat, 2) == start_lat & round(start_lng, 2) == start_lng) |
            (round(end_lat, 2) == end_lat & round(end_lng, 2) == end_lng))
 
-nrow(before_improvement_dec2)
+nrow(coords_before_improvement_dec2)
 # 1409224 records
 
-nrow(improved_dec2)
+nrow(coords_improved_dec2)
 # 1315099 records
 
 # Coordinates on 94125 rows were improved in precision as a result
 
-# Re-assign the improved data to trips
-trips <- improved
+# Re-assign the improved data to `trips_cleaned`
+trips_cleaned <- improved
 
-# Finally, calculate displacement distance and append to 'trips'
+# Finally, calculate displacement distance and append to 'trips_cleaned'
 
 # Create function to calculate distance between coordinates
-haversine_distance <- function(start_lat, start_lng, end_lat, end_lng) {
+calculate_haversine_distance <- function(start_lat, start_lng, end_lat, end_lng) {
   # Radius of the Earth in kilometers
   R <- 6371.0
   
@@ -521,14 +510,15 @@ haversine_distance <- function(start_lat, start_lng, end_lat, end_lng) {
 }
 
 # Create and add displacement distance `disp_distance` column to data
-trips <- trips %>%
+trips_cleaned <- trips_cleaned %>%
   mutate(
-    disp_distance = haversine_distance(start_lat, start_lng, end_lat, end_lng),
+    disp_distance = calculate_haversine_distance(start_lat, start_lng, end_lat, end_lng),
     date = as.Date(started_at) 
   )
 
 
-backup_trips <- trips
+
+write.csv(trips_cleaned, "data/processed/trips_cleaned.csv", row.names=FALSE)
 
 
 
