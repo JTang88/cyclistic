@@ -1,0 +1,356 @@
+---
+title: "Cyclistic - Cleaning & EDA"
+output: html_notebook
+---
+
+This notebook document the data cleaning process for the Cyclistic Project.   
+
+Analysed Period: 2022/07/01 - 2023/06/30  
+Data Source: https://divvy-tripdata.s3.amazonaws.com/index.html  
+
+If you are following along with the process in R notebook, visit the link above and download trip data of the Analysed Period and place them in the cyclystic/raw_data folder, and run the cyclystic/scripts/01_load_data.R. Then we are ready to beging.  
+
+### 1. Data Preview
+
+First, import the combined raw data "trips_combined.csv"
+```{r}
+trips <- read_csv("../data/interim/trips_combined.csv")
+```
+<br>
+
+Let's see what our data looks like
+```{r}
+head(trips)
+```
+<br>
+
+Now let's get NA rate for each variable
+```{r}
+print(summarise_all(trips, ~mean(is.na(.))))
+```
+<br>
+
+Check for duplicates in `ride_id`. See result below:
+```{r}
+print(any(duplicated(trips$ride_id)))
+```
+<br>
+
+
+### 2. Initial Cleaning from Data Preview
+
+Extract "hour", "month", "weekday", and "trip duration" from from `started_at` and `ended_at`
+```{r}
+trips <- trips %>% 
+  mutate(
+    hour = hour(started_at),
+    weekday = wday(started_at, label = TRUE),
+    month = month(started_at, label = TRUE),
+    trip_duration = difftime(ended_at, started_at, units = "mins")
+  )
+```
+<br>
+
+station name and `member_causal` column have different capitalization, let's make relevant character columns lower case. 
+```{r}
+trips <- trips %>% 
+  mutate(across(c(rideable_type, start_station_name, end_station_name), tolower))
+```
+<br>
+
+Trim white spaces in character columns just in case
+```{r}
+trips <- trips %>% mutate(across(where(is.character), trimws))
+```
+<br>
+
+Make `rideable_type` and `member_casual` factors
+```{r}
+trips$member_casual <- as.factor(trips$member_casual)
+trips$rideable_type <- as.factor(trips$rideable_type)
+```
+<br> 
+
+We will investigate these items in section 3. Exploratory Data Analysis.  
+- Station related columns all have around 15% NAs, suggesting a pattern rather than random.    
+- The consistency in the level of precision for coordinates related columns needs to be verified.
+- Handling NAs in `end_lat` and `end_lng`
+
+### 3. Exploratory Data Analysis
+<br>
+
+##### Rideable Types & Trip Duration
+
+First, look at distribution
+```{r, fig.width=8, fig.height=4}
+trip_duration_distribution_plot <- ggplot(trips, aes(x = trip_duration)) +
+  geom_histogram(aes(fill = rideable_type), bins = 50, alpha = 0.7) +
+  facet_wrap(~rideable_type) +
+  labs(title = "Distribution of Trip Duration by Rideable Type", x = "Trip Duration (mins)", y = "Count") +
+  scale_y_continuous(labels = comma) +
+  theme_minimal() + 
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    text = element_text(size = 7), 
+    legend.key.size = unit(7, "pt"),
+    legend.position = "bottom", 
+    )
+
+trip_distribution_by_usertype_plot <- ggplot(trips, aes(x = rideable_type, fill = member_casual)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Count of Rideable Types by User Type - `member_causal`",
+       x = "Rideable Type",
+       y = "Count") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(hjust = 0.5),
+    text = element_text(size = 7), 
+    legend.key.size = unit(7, "pt"),
+    legend.position = "bottom", 
+    )
+
+trip_duration_distribution_plot + trip_distribution_by_usertype_plot
+```
+
+Basic statistically analysis:
+```{r}
+trip_summary <- trips %>%
+  group_by(rideable_type) %>%
+  summarise(
+    min_duration = min(trip_duration, na.rm = TRUE),
+    max_duration = max(trip_duration, na.rm = TRUE),
+    median_duration = median(trip_duration, na.rm = TRUE),
+    average_duration = mean(trip_duration, na.rm = TRUE),
+  )
+
+# Printing results
+print(trip_summary)
+```
+
+NOTES:
+Negative trip duration is not possible but they are detected in both `classic_bike` and `eletric_bike`. Extreme long duration occurs in docked_bike which significantly skews the data. Both discoveries need further investigation. 
+
+First, let's find out the percentage of negative duration trips exist in `classic_bike` and `eletric_bike`:
+```{r}
+neg_duration_rates <- trips %>%
+  group_by(rideable_type) %>%
+  summarise(rate = mean(trip_duration <= 0) * 100) %>%
+  pivot_wider(names_from = rideable_type, values_from = rate)
+
+print(glue("Percentage of negative duration in classic bike trips: {neg_duration_rates$classic_bike}%"))
+print(glue("Percentage of negative duration in electric bike trips: {neg_duration_rates$electric_bike}%"))
+```
+
+NOTES:
+The percentage of negative duration `classic_bike` and `eletric_bike` is considered insignificant. We'll treat them as noise and remove them from our dataset.
+
+Remove `trips` with trips shorter than 2 min, negative duration trips included
+```{r}
+trips$trip_duration <- as.numeric(trips$trip_duration)
+
+trips <- trips %>% 
+  filter(trip_duration > 2)
+```
+
+<br> 
+
+NOTE:
+`docked_type` count is significantly lower than other 2 `rideable_types` and 100% of docked bikes are ridden by "casual" user type.
+We will perform a bivariant analysis with just the "docked bike" `rideable_types` and `trip_duration` to gain a deeper understanding.
+
+Log scale histogram
+```{r, fig.width=8, fig.height=4}
+ggplot(trips, aes(x = trip_duration)) +
+  geom_histogram(aes(fill = rideable_type), bins = 50, alpha = 0.7) +
+  facet_wrap(~rideable_type) +
+  labs(title = "Distribution of Trip Duration by Rideable Type", x = "Trip Duration (mins)", y = "Count (Log Scale)") +
+  scale_y_continuous(trans = "log10", labels = comma) +
+  theme_minimal() + 
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    text = element_text(size = 7), 
+    legend.key.size = unit(7, "pt"),
+    legend.position = "bottom", 
+  ) 
+```
+NOTE: We use log10 scale here to gain a deeper understanding of those abnormal long duration trips, ensuring they are not just rare random occurrences. The amount of abnormal long duration true plus its significantly lower ride count discovered earlier indicating a pattern rather than noise. Confirmed with further research, we've concluded that docked_bikes are bikes taken out of circulation, and should be removed for the data set for the purpose of this analysis.   
+
+Remove `docked_bikes` trips from our analysis
+```{r}
+trips <- trips %>% 
+  filter(rideable_type != "docked_bike")
+```
+<br>
+
+
+
+NOTE: Note that both X and Y axis are on free scale, and still show a significant difference in the ride duration range between the two. Also, due to our skewed the data is, we are not going to use the outlier formula here. We'll use information provided by divvy trips website, and common sense to make our best judgement and focus on the core patterns. Based on the cost for each ride type, it's unlikely that a rider keeping a trip for long duration, ex: 5 hrs to 24 hrs on purpose since its get expensive. let's again use the log10 y scale to look at the 2 bike type's of trip duration distribution and spot patterns.  
+
+```{r, fig.width=8, fig.height=4}
+ggplot(trips, aes(x = trip_duration)) +
+  geom_histogram(bins = 50, alpha = 0.7, color = "black") +
+  facet_wrap(~rideable_type, scales = "free") +
+  labs(title = "Distribution of Classic and Electric Bike Trip Duration", 
+       x = "Trip Duration (mins)", 
+       y = "Count") +
+  scale_y_continuous(trans = "log10", labels = comma) +
+  theme_minimal() + 
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    text = element_text(size = 7), 
+    legend.key.size = unit(7, "pt"),
+  )
+```
+
+NOTE: It's a log10 scale, so don't the graph miss lead you and pay attention to he 10 label on the y axis(count), We can see the first time a directional change is at around 531.25 min mark in the classic bike graph and 350 min mark which majority of the count are below a 100 at this point, and the trend start to flatten. We think this is attribute to bikes that were not docked properly earlier, either setting there waiting to be docked properly used again by other users, both resulted in the continuation of the duration, We also see a bike at the very end, this is likely due to the staff docking the the preciously not docking bike following schedule. We will remove trips longer than these two markers from our dataset. Though, they only represent a very small percentage of the dataset, our data should better refect the normal user behavior as a result. 
+
+```{r}
+trips <- trips %>%
+  filter_and_report(
+    (rideable_type == "classic_bike" & trip_duration < 531.25) |
+    (rideable_type == "electric_bike" & trip_duration < 350)
+  )
+```
+
+Finally, let's look at our distribution once again after it's been cleaned up 
+```{r, fig.width=8, fig.height=4}
+ggplot(trips, aes(x = trip_duration)) +
+  geom_histogram(aes(fill = rideable_type), bins = 50, alpha = 0.7) +
+  facet_wrap(~rideable_type) +
+  labs(title = "Distribution of Trip Duration by Rideable Type", x = "Trip Duration (mins)", y = "Count (Log Scale)") +
+  scale_y_continuous(labels = comma) +
+  theme_minimal() + 
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    text = element_text(size = 7), 
+    legend.key.size = unit(7, "pt"),
+    legend.position = "bottom", 
+  )
+```
+Trip Duration Summary
+```{r}
+trip_summary <- trips %>%
+  group_by(rideable_type) %>%
+  summarise(
+    min_duration = min(trip_duration, na.rm = TRUE),
+    max_duration = max(trip_duration, na.rm = TRUE),
+    median_duration = median(trip_duration, na.rm = TRUE),
+    average_duration = mean(trip_duration, na.rm = TRUE),
+  )
+
+# Printing results
+print(trip_summary)
+```
+
+##### NAs in Station Related Columns
+
+After further research, we learned that classic bikes dock exclusively at Divvy stations whereas electric bikes can dock at non-Divvy stations or public fixtures. This difference might explain the missing station ids and names in our data.Below, we will explore NAs in station columns of the different ride types.  
+
+The Bar Char Represention
+```{r, fig.width=8, fig.height=4}
+missing_station <- trips %>% 
+  filter(
+    is.na(start_station_id) | 
+    is.na(start_station_name) | 
+    is.na(end_station_id) |
+    is.na(end_station_name)
+  )
+
+ggplot(missing_station, aes(x = rideable_type)) +
+  geom_bar(position = "dodge") +
+  geom_text(
+    aes(label = ..count..), 
+    stat = 'count', 
+    position = position_dodge(width = 0.9), 
+    vjust = -0.25
+  ) +
+  labs(
+    title = "Count of Missing Station Info",
+    x = "Rideable Type",
+    y = "NA Count"
+  ) +
+  scale_y_continuous(labels = comma) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(hjust = 0.5),
+    text = element_text(size = 7),  
+    legend.key.size = unit(7, "pt"),  
+    legend.position = "bottom"
+  )
+```
+Our hypothesis is confirmed: the flexible return options for electric bikes are the primary cause of missing station IDs and names. These NA values are expected, therefore we will keep the rows with these NA values.  
+
+##### NAs in End Coordinates
+
+Now we can remove rows with NAs in end coordinates. See result below:
+```{r}
+trips <- trips %>% 
+  filter_and_report(!is.na(end_lat) & !is.na(end_lng))
+```
+
+##### Data Imputation - Station Ids and Names
+Assuming every station name has a corresponding ids, we shall find the missing half of any pair in our dataset.
+
+Identify `start_station_name` records that are missing corresponding ids
+```{r}
+start_name_missing_id <- trips %>% 
+  filter(!is.na(start_station_name) & is.na(start_station_id)) %>% 
+  distinct(start_station_name)
+
+print(start_name_missing_id)
+```
+Identify `end_station_name` records that are missing corresponding ids
+```{r}
+end_name_missing_id <- trips %>% 
+  filter(!is.na(end_station_name) & is.na(end_station_id)) %>% 
+  distinct(end_station_name)
+
+print(end_name_missing_id)
+```
+
+Identify `start_station_id` records that are missing corresponding name
+```{r}
+start_id_missing_name <- trips %>% 
+  filter(!is.na(start_station_id) & is.na(start_station_name)) %>% 
+  distinct(start_station_id)
+
+print(start_id_missing_name)
+# 0 record
+```
+
+Identify `end_station_id` records that are missing corresponding name
+```{r}
+end_id_missing_name <- trips %>% 
+  filter(!is.na(end_station_id) & is.na(end_station_name)) %>% 
+  distinct(end_station_id)
+
+print(end_id_missing_name)
+```
+Fill station ids
+```{r}
+fill_ids <- function(data, station_name, id) {
+  #create a subset with missing start station ids
+  with_missing_id <- data %>% 
+    filter(is.na(start_station_id) | is.na(end_station_id))
+  
+  #create a subset without missing ids
+  without_missing_id <- data %>% 
+    filter(!is.na(start_station_id) & !is.na(end_station_id))
+  
+  with_missing_id <- with_missing_id %>% 
+    mutate(
+      start_station_id = ifelse(start_station_name == station_name, id, start_station_id),
+      end_station_id = ifelse(end_station_name == station_name, id, end_station_id)
+    )
+  
+  combined_df <- bind_rows(with_missing_id, without_missing_id)
+}
+
+trips <- fill_ids(trips, "stony island ave & 63rd st", "653B")
+trips <- fill_ids(trips, "elizabeth st & randolph st", "23001")
+```
+
+let's now get a count of NAs in both station name and station ids and see if they matched 
+```{r}
+print(summarise_all(trips, ~sum(is.na(.))))
+```

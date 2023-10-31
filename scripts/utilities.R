@@ -12,3 +12,22 @@ import_trips_factorize_variables <- function(file_path) {
 }
 
 
+# A wrapped filter function that report outcome
+filter_and_report <- function(.data, ...) {
+  initial_rows <- nrow(.data)
+  result <- filter(.data, ...)
+  records_retained <- nrow(result)
+  records_removed <- initial_rows - records_retained
+  
+  percentage_retained <- (records_retained / initial_rows) * 100
+  percentage_removed <- (records_removed / initial_rows) * 100
+  
+  print(glue("{records_retained} records retained ({round(percentage_retained, 5)}%), {records_removed} records removed ({round(percentage_removed, 5)}%)"))
+  
+  return(result)
+}
+
+
+
+
+

@@ -18,14 +18,14 @@ file_names <- list.files(
 
 # # Read all files into a list
 # files <- map(file_names, read_csv)
-# 
+
 # # Print file name and skim the data
 # walk2(files, file_names, function(data, name) {
 #   print(paste("=============================================== Skim Summary of file:", name, "==============================================="))
 #   print(skim(data))
 # })
 
-# Use "...=== Skim Summary of file ===..." to identify breaks between flies in 
+# Use "...=== Skim Summary of file ===..." to identify breaks between flies in
 
 # ==============================================================================
 
