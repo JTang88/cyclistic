@@ -27,6 +27,23 @@ filter_and_report <- function(.data, ...) {
   return(result)
 }
 
+# function to find missing value within the data in a pairing scenario 
+impute_from_pair <- function(data, source_col, impute_col) {
+  # Create a reference set with non-missing impute_col values
+  reference <- data %>%
+    filter(!is.na(.data[[impute_col]])) %>%
+    distinct(.data[[source_col]], .keep_all = TRUE)
+  
+  # Perform imputation by matching on source column
+  data_imputed <- data %>%
+    left_join(reference, by = source_col, suffix = c("", "_ref")) %>%
+    mutate(!!sym(impute_col) := coalesce(.data[[impute_col]], .data[[paste0(impute_col, "_ref")]])) %>%
+    select(-ends_with("_ref")) # Removes the additional columns with "_ref" suffix
+  
+  # Return the dataset with imputed values
+  return(data_imputed)
+}
+
 
 
 

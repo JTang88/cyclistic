@@ -24,9 +24,9 @@ head(trips)
 ```
 <br>
 
-Now let's get NA rate for each variable
+Now let's get NA count for each variable
 ```{r}
-print(summarise_all(trips, ~mean(is.na(.))))
+print(summarise_all(trips, ~sum(is.na(.))))
 ```
 <br>
 
@@ -76,7 +76,7 @@ We will investigate these items in section 3. Exploratory Data Analysis.
 - The consistency in the level of precision for coordinates related columns needs to be verified.
 - Handling NAs in `end_lat` and `end_lng`
 
-### 3. Exploratory Data Analysis
+### 3. Variable Exploration
 <br>
 
 ##### Rideable Types & Trip Duration
@@ -242,7 +242,14 @@ trip_summary <- trips %>%
 print(trip_summary)
 ```
 
-##### NAs in Station Related Columns
+### 4. Missing Values Exploration
+
+Let's get an update on NAs in our dataset
+```{r}
+print(summarise_all(trips, ~sum(is.na(.))))
+```
+
+##### Explore NAs in Station Related Columns
 
 After further research, we learned that classic bikes dock exclusively at Divvy stations whereas electric bikes can dock at non-Divvy stations or public fixtures. This difference might explain the missing station ids and names in our data.Below, we will explore NAs in station columns of the different ride types.  
 
@@ -280,6 +287,7 @@ ggplot(missing_station, aes(x = rideable_type)) +
 ```
 Our hypothesis is confirmed: the flexible return options for electric bikes are the primary cause of missing station IDs and names. These NA values are expected, therefore we will keep the rows with these NA values.  
 
+
 ##### NAs in End Coordinates
 
 Now we can remove rows with NAs in end coordinates. See result below:
@@ -288,69 +296,24 @@ trips <- trips %>%
   filter_and_report(!is.na(end_lat) & !is.na(end_lng))
 ```
 
-##### Data Imputation - Station Ids and Names
-Assuming every station name has a corresponding ids, we shall find the missing half of any pair in our dataset.
-
-Identify `start_station_name` records that are missing corresponding ids
+##### Imputation - Station Ids and Station Names
+For both start and end, station ids come in pairs with station name, thus their count should be the same. There is a very small difference between them in our data set. We will use our imputation function to fix this. and print the missing value summary to see the difference
 ```{r}
-start_name_missing_id <- trips %>% 
-  filter(!is.na(start_station_name) & is.na(start_station_id)) %>% 
-  distinct(start_station_name)
-
-print(start_name_missing_id)
-```
-Identify `end_station_name` records that are missing corresponding ids
-```{r}
-end_name_missing_id <- trips %>% 
-  filter(!is.na(end_station_name) & is.na(end_station_id)) %>% 
-  distinct(end_station_name)
-
-print(end_name_missing_id)
-```
-
-Identify `start_station_id` records that are missing corresponding name
-```{r}
-start_id_missing_name <- trips %>% 
-  filter(!is.na(start_station_id) & is.na(start_station_name)) %>% 
-  distinct(start_station_id)
-
-print(start_id_missing_name)
-# 0 record
-```
-
-Identify `end_station_id` records that are missing corresponding name
-```{r}
-end_id_missing_name <- trips %>% 
-  filter(!is.na(end_station_id) & is.na(end_station_name)) %>% 
-  distinct(end_station_id)
-
-print(end_id_missing_name)
-```
-Fill station ids
-```{r}
-fill_ids <- function(data, station_name, id) {
-  #create a subset with missing start station ids
-  with_missing_id <- data %>% 
-    filter(is.na(start_station_id) | is.na(end_station_id))
-  
-  #create a subset without missing ids
-  without_missing_id <- data %>% 
-    filter(!is.na(start_station_id) & !is.na(end_station_id))
-  
-  with_missing_id <- with_missing_id %>% 
-    mutate(
-      start_station_id = ifelse(start_station_name == station_name, id, start_station_id),
-      end_station_id = ifelse(end_station_name == station_name, id, end_station_id)
-    )
-  
-  combined_df <- bind_rows(with_missing_id, without_missing_id)
-}
-
-trips <- fill_ids(trips, "stony island ave & 63rd st", "653B")
-trips <- fill_ids(trips, "elizabeth st & randolph st", "23001")
-```
-
-let's now get a count of NAs in both station name and station ids and see if they matched 
-```{r}
+trips <- impute_from_pair(trips, "start_station_name", "start_station_id")
+trips <- impute_from_pair(trips, "end_station_name", "end_station_id")
 print(summarise_all(trips, ~sum(is.na(.))))
 ```
+
+### 5. Coodindates Standardization
+
+
+
+
+
+
+
+
+
+
+
+
