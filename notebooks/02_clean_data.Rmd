@@ -182,8 +182,6 @@ trips <- trips %>%
 ```
 <br>
 
-
-
 NOTE: Note that both X and Y axis are on free scale, and still show a significant difference in the ride duration range between the two. Also, due to our skewed the data is, we are not going to use the outlier formula here. We'll use information provided by divvy trips website, and common sense to make our best judgement and focus on the core patterns. Based on the cost for each ride type, it's unlikely that a rider keeping a trip for long duration, ex: 5 hrs to 24 hrs on purpose since its get expensive. let's again use the log10 y scale to look at the 2 bike type's of trip duration distribution and spot patterns.  
 
 ```{r, fig.width=8, fig.height=4}
@@ -242,14 +240,13 @@ trip_summary <- trips %>%
 print(trip_summary)
 ```
 
-### 4. Missing Values Exploration
+
+##### Explore NAs in Station Related Columns
 
 Let's get an update on NAs in our dataset
 ```{r}
 print(summarise_all(trips, ~sum(is.na(.))))
 ```
-
-##### Explore NAs in Station Related Columns
 
 After further research, we learned that classic bikes dock exclusively at Divvy stations whereas electric bikes can dock at non-Divvy stations or public fixtures. This difference might explain the missing station ids and names in our data.Below, we will explore NAs in station columns of the different ride types.  
 
@@ -304,7 +301,124 @@ trips <- impute_from_pair(trips, "end_station_name", "end_station_id")
 print(summarise_all(trips, ~sum(is.na(.))))
 ```
 
-### 5. Coodindates Standardization
+
+##### Start & End Coordinates Precision Analysis
+We can't improve the coordinate precision for those electric bike trips that either didn't start or end at a divvy station since there is no reference to a higher precision coordinates within our data. However, for trips that did start or end at a divvy bike station, through internal imputation, the accuracy can potentially be improved at scale. 
+
+first, let's see how many divvy station actually has precise coordinates within our data. We will begin by adding a column to label the precision in the form of decimal places, from 1 to 5. and get a count of unique stations with a precision of 5 decimal point or more vs total unique station exist in our data set
+```{r}
+# Vectorized function to determine the maximum number of decimal places between two numbers
+get_max_precision_decimal <- function(lat_vector, lng_vector) {
+  # Vectorized function to determine the number of decimal places
+  get_precision <- function(coord_vector) {
+    sapply(coord_vector, function(coord) {
+      precision <- 1
+      for (i in 4:1) {
+        if (round(coord, digits = i) != coord) {
+          precision <- i + 1
+          break
+        }
+      }
+      return(precision)
+    })
+  }
+  
+  # Get precision for both latitude and longitude
+  lat_precision <- get_precision(lat_vector)
+  lng_precision <- get_precision(lng_vector)
+  
+  # Return the larger of the two precisions for each pair of coordinates
+  pmax(lat_precision, lng_precision)
+}
+
+# Create a reference of unique stations with precisie coordinates
+# ==============================================================================
+# Below code needs update and refacoring achieve its purpose: 
+
+# Create a subset for start stations and remove "start" prefix from selected columns
+start_stations <- trips %>% 
+  select(start_station_name, start_lat, start_lng) %>% 
+  filter(!is.na(start_station_name)) %>% 
+  rename(station_name = start_station_name, lat = start_lat, lng = start_lng)
+
+# Create a subset for end stations and remove "end" prefix from all selected columns
+end_stations <- trips %>% 
+  select(end_station_name, end_lat, end_lng) %>% 
+  filter(!is.na(end_station_name)) %>% 
+  rename(station_name = end_station_name, lat = end_lat, lng = end_lng)
+
+View(end_stations)
+
+# Combine the two
+stations_combined <- bind_rows(start_stations, end_stations)
+
+# Add coord_precision to to subset with get_max_precision_decimal function 
+stations_combined <- stations_combined %>%
+  mutate(
+    coord_precision = get_max_precision_decimal(lat, lng),
+  )
+
+# Create a subset of all unique stations regardless of coordinate precision 
+stations_unique <- distinct(stations_combined, station_name)
+
+# Keep only high precision coordinates (5 decimal places or higher)
+# Keep only median coordinates value while removing duplicated stations
+stations_precise <- stations_combined %>% 
+  filter(coord_precision >= 5) %>% 
+  group_by(station_name) %>% 
+  summarise(med_lat = median(lat), med_lng = median(lng))
+
+glue("Total unique stations: {nrow(stations_unique)}")
+glue("Stations with precise coordinates: {nrow(stations_precise)}")
+glue("Stations without precise coordinates: {nrow(stations_unique) - nrow(stations_precise)}")
+```
+
+Before we move ahead with imputation, we must understand the potential impact and side effect of such operation. We will do so by investigating stations without precise coordinates.  
+
+Let's first see how many trips are associated with these stations
+```{r}
+# Identify station without imprecise coordinates
+stations_imprecise <- setdiff(
+  stations_unique$station_name,
+  stations_precise$station_name
+)
+
+# Subset the trips associated with these stations
+trips_stations_imprecise <- trips %>%
+  filter(
+    start_station_name %in% stations_imprecise | 
+     end_station_name %in% stations_imprecise
+  )
+
+glue("Trips associated with stations without precise coordinates: {nrow(trips_stations_imprecise)}")
+```
+
+The count is minimal, but we'll dive in a little deeper to spot any patterns.  
+```{r}
+ggplot(trips_stations_imprecise, aes(x = rideable_type, fill = member_casual)) +
+  geom_bar(position = "dodge") +
+  geom_text(
+    aes(label = ..count..), 
+    stat = 'count', 
+    position = position_dodge(width = 0.9), 
+    vjust = -0.25
+  ) +
+  labs(title = "Count of Rideable Types by User Type",
+       x = "Rideable Type",
+       y = "Count") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(hjust = 0.5),
+    text = element_text(size = 7), 
+    legend.key.size = unit(7, "pt"),
+    legend.position = "bottom", 
+    )
+```
+All but one are electric bike rides. After view directly view these records, the only classic bike ride appears to have been returned to an incorrect station, given its end station name is "oh charging stx - test". This observation strengthens our hypothesis, especially since many station names have the prefix "public rack". The higher count of casual users here might be due to their unfamiliarity with the locations of divvy stations. 
+
+Considered % of these records represent as of the total number of records, we feel it's sound to perform imputations. 
+
+#### High Precision Coodindates Imputation 
 
 
 
