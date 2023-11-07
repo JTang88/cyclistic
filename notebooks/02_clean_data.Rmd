@@ -305,7 +305,7 @@ print(summarise_all(trips, ~sum(is.na(.))))
 ##### Start & End Coordinates Precision Analysis
 We can't improve the coordinate precision for those electric bike trips that either didn't start or end at a divvy station since there is no reference to a higher precision coordinates within our data. However, for trips that did start or end at a divvy bike station, through internal imputation, the accuracy can potentially be improved at scale. 
 
-first, let's see how many divvy station actually has precise coordinates within our data. We will begin by adding a column to label the precision in the form of decimal places, from 1 to 5. and get a count of unique stations with a precision of 5 decimal point or more vs total unique station exist in our data set
+first, let's see how many divvy station actually has precise coordinates within our data. We will begin by adding  columns to label the precision in the form of decimal places, from 1 to 5. and get a count of unique stations with a precision of 5 decimal point or more vs total unique station exist in our data set
 ```{r}
 # Vectorized function to determine the maximum number of decimal places between two numbers
 get_max_precision_decimal <- function(lat_vector, lng_vector) {
@@ -331,32 +331,36 @@ get_max_precision_decimal <- function(lat_vector, lng_vector) {
   pmax(lat_precision, lng_precision)
 }
 
-# Create a reference of unique stations with precisie coordinates
+trips <- trips %>% 
+  mutate(
+    start_coord_precision = get_max_precision_decimal(start_lat, start_lng),
+    end_coord_precision = get_max_precision_decimal(end_lat, end_lng)
+  )
+
+# Create a reference of unique stations with precision coordinates
 # ==============================================================================
-# Below code needs update and refacoring achieve its purpose: 
+# Below code needs update and refactoring achieve its purpose: 
 
 # Create a subset for start stations and remove "start" prefix from selected columns
 start_stations <- trips %>% 
-  select(start_station_name, start_lat, start_lng) %>% 
+  select(start_station_name, start_lat, start_lng, start_coord_precision) %>% 
   filter(!is.na(start_station_name)) %>% 
-  rename(station_name = start_station_name, lat = start_lat, lng = start_lng)
+  rename(station_name = start_station_name,
+         lat = start_lat,
+         lng = start_lng,
+         coord_precision = start_coord_precision)
 
 # Create a subset for end stations and remove "end" prefix from all selected columns
 end_stations <- trips %>% 
-  select(end_station_name, end_lat, end_lng) %>% 
+  select(end_station_name, end_lat, end_lng, end_coord_precision) %>% 
   filter(!is.na(end_station_name)) %>% 
-  rename(station_name = end_station_name, lat = end_lat, lng = end_lng)
-
-View(end_stations)
+  rename(station_name = end_station_name,
+         lat = end_lat,
+         lng = end_lng,
+         coord_precision = end_coord_precision)
 
 # Combine the two
 stations_combined <- bind_rows(start_stations, end_stations)
-
-# Add coord_precision to to subset with get_max_precision_decimal function 
-stations_combined <- stations_combined %>%
-  mutate(
-    coord_precision = get_max_precision_decimal(lat, lng),
-  )
 
 # Create a subset of all unique stations regardless of coordinate precision 
 stations_unique <- distinct(stations_combined, station_name)
