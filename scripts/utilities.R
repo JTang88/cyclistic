@@ -45,6 +45,44 @@ impute_from_pair <- function(data, source_col, impute_col) {
 }
 
 
+# Vectorized function to determine the maximum number of decimal places between two numbers
+get_max_precision_decimal <- function(lat_vector, lng_vector) {
+  # Vectorized function to determine the number of decimal places
+  get_precision <- function(coord_vector) {
+    sapply(coord_vector, function(coord) {
+      precision <- 1
+      for (i in 4:1) {
+        if (round(coord, digits = i) != coord) {
+          precision <- i + 1
+          break
+        }
+      }
+      return(precision)
+    })
+  }
+  
+  # Get precision for both latitude and longitude
+  lat_precision <- get_precision(lat_vector)
+  lng_precision <- get_precision(lng_vector)
+  
+  # Return the larger of the two precisions for each pair of coordinates
+  pmax(lat_precision, lng_precision)
+}
+
+
+# Step 2: Function to add randomness to the 5th decimal place
+add_randomness <- function(coordinate) {
+  # Extract the integer part and the first four decimal places
+  truncated_coordinate <- trunc(coordinate * 1e4) / 1e4
+  
+  # Generate a random number starting from the fifth decimal place
+  random_fraction <- runif(1, min = 0, max = 1e-4)
+  
+  # Add the random fraction back to the truncated coordinate
+  random_coordinate <- truncated_coordinate + random_fraction
+  
+  return(random_coordinate)
+}
 
 
 

@@ -307,30 +307,6 @@ We can't improve the coordinate precision for those electric bike trips that eit
 
 first, let's see how many divvy station actually has precise coordinates within our data. We will begin by adding  columns to label the precision in the form of decimal places, from 1 to 5. and get a count of unique stations with a precision of 5 decimal point or more vs total unique station exist in our data set
 ```{r}
-# Vectorized function to determine the maximum number of decimal places between two numbers
-get_max_precision_decimal <- function(lat_vector, lng_vector) {
-  # Vectorized function to determine the number of decimal places
-  get_precision <- function(coord_vector) {
-    sapply(coord_vector, function(coord) {
-      precision <- 1
-      for (i in 4:1) {
-        if (round(coord, digits = i) != coord) {
-          precision <- i + 1
-          break
-        }
-      }
-      return(precision)
-    })
-  }
-  
-  # Get precision for both latitude and longitude
-  lat_precision <- get_precision(lat_vector)
-  lng_precision <- get_precision(lng_vector)
-  
-  # Return the larger of the two precisions for each pair of coordinates
-  pmax(lat_precision, lng_precision)
-}
-
 trips <- trips %>% 
   mutate(
     start_coord_precision = get_max_precision_decimal(start_lat, start_lng),
@@ -437,44 +413,36 @@ trips <- trips %>%
   left_join(stations_precise, by = c("start_station_name" = "station_name")) %>%
   left_join(stations_precise, by = c("end_station_name" = "station_name"), suffix = c("_start", "_end"))
 
-# Step 2: Function to add randomness to the 5th decimal place
-add_randomness <- function(coordinate) {
-  # Extract the integer part and the first four decimal places
-  truncated_coordinate <- trunc(coordinate * 1e4) / 1e4
-  
-  # Generate a random number starting from the fifth decimal place
-  random_fraction <- runif(1, min = 0, max = 1e-4)
-  
-  # Add the random fraction back to the truncated coordinate
-  random_coordinate <- truncated_coordinate + random_fraction
-  
-  return(random_coordinate)
-}
-
 # Step 2: Impute coordinates with less than 5 decimal precision
 trips <- trips %>%
-  mutate(start_lat = ifelse(start_coord_precision < 5, add_randomness(med_lat_start), start_lat),
-         start_lng = ifelse(start_coord_precision < 5, add_randomness(med_lng_start), start_lng),
-         end_lat = ifelse(end_coord_precision < 5, add_randomness(med_lat_end), end_lat),
-         end_lng = ifelse(end_coord_precision < 5, add_randomness(med_lng_end), end_lng))
+  mutate(
+    start_lat = ifelse(
+      start_coord_precision < 5 & !is.na(med_lat_start), 
+      add_randomness(med_lat_start),
+      start_lat
+    ),
+    start_lng = ifelse(
+      start_coord_precision < 5 & !is.na(med_lng_start),
+      add_randomness(med_lng_start),
+      start_lng
+    ),
+    end_lat = ifelse(
+      end_coord_precision < 5 & !is.na(med_lat_end),
+      add_randomness(med_lat_end),
+      end_lat
+    ),
+    end_lng = ifelse(
+      end_coord_precision < 5 & !is.na(med_lng_end),
+      add_randomness(med_lng_end),
+      end_lng
+    )
+  )
 
 # Remove the extra columns that were created during the join if they are not needed
 trips <- trips %>%
   select(-matches("_start$|_end$"))
-
-low_precision_count <- (
-  nrow(trips %>% filter(start_coord_precision < 5)) + 
-    nrow(trips %>% filter(end_coord_precision < 5))
-  )
-
-print(low_precision_count)
-
-
-test <- trips %>% 
-  filter(is.na(start_lat) | is.na(start_lng))
-
-View(test)
 ```
+
 
 Now let's re-impute the coordinate precision and compare before and after
 ```{r}
@@ -490,9 +458,6 @@ low_precision_count <- (
   )
 
 glue("Total low precision coordinates count, both start and end: {low_precision_count}")
-
-
-
 ```
 
 
