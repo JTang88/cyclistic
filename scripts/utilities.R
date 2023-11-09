@@ -44,14 +44,13 @@ impute_from_pair <- function(data, source_col, impute_col) {
   return(data_imputed)
 }
 
-
-# Vectorized function to determine the maximum number of decimal places between two numbers
-get_max_precision_decimal <- function(lat_vector, lng_vector) {
-  # Vectorized function to determine the number of decimal places
+# Computes and imputes maximum coordinate precision for start and end points in a dataset up to a specified limit.
+add_and_impute_coord_precisions <- function(data, precision_check_limit) {
+  # Inner function to calculate precision for a single coordinate vector
   get_precision <- function(coord_vector) {
     sapply(coord_vector, function(coord) {
       precision <- 1
-      for (i in 4:1) {
+      for (i in (precision_check_limit - 1):1) {
         if (round(coord, digits = i) != coord) {
           precision <- i + 1
           break
@@ -61,13 +60,59 @@ get_max_precision_decimal <- function(lat_vector, lng_vector) {
     })
   }
   
-  # Get precision for both latitude and longitude
-  lat_precision <- get_precision(lat_vector)
-  lng_precision <- get_precision(lng_vector)
+  # Function to calculate the maximum precision for latitude and longitude pairs
+  get_max_coord_precision <- function(lat_vector, lng_vector) {
+    lat_precision <- get_precision(lat_vector)
+    lng_precision <- get_precision(lng_vector)
+    pmax(lat_precision, lng_precision)
+  }
   
-  # Return the larger of the two precisions for each pair of coordinates
-  pmax(lat_precision, lng_precision)
+  # Mutate the data frame to add precision columns
+  data %>% 
+    mutate(
+      start_coord_precision = get_max_coord_precision(start_lat, start_lng),
+      end_coord_precision = get_max_coord_precision(end_lat, end_lng)
+    )
 }
+
+
+count_lower_precision_coord <- function(data, precision_threshold) {
+  # Counts the rows where either start or end coordinate precision is below the threshold.
+  count <- sum(data$start_coord_precision < precision_threshold, 
+               data$end_coord_precision < precision_threshold, na.rm = TRUE)
+  return(count)
+}
+
+
+# combine stations function
+combine_all_stations_instances <- function(data) {
+  # Create a subset for start stations and remove "start" prefix from selected columns
+  start_stations <- data %>% 
+    select(start_station_name, start_lat, start_lng, start_coord_precision) %>% 
+    filter(!is.na(start_station_name)) %>% 
+    rename(
+      station_name = start_station_name,
+      lat = start_lat,
+      lng = start_lng,
+      coord_precision = start_coord_precision
+    )
+  
+  # Create a subset for end stations and remove "end" prefix from all selected columns
+  end_stations <- data %>% 
+    select(end_station_name, end_lat, end_lng, end_coord_precision) %>% 
+    filter(!is.na(end_station_name)) %>% 
+    rename(
+      station_name = end_station_name,
+      lat = end_lat,
+      lng = end_lng,
+      coord_precision = end_coord_precision
+    )
+  
+  # Combine the two
+  return(bind_rows(start_stations, end_stations))
+}
+
+
 
 
 # Step 2: Function to add randomness to the 5th decimal place
@@ -83,6 +128,45 @@ add_randomness <- function(coordinate) {
   
   return(random_coordinate)
 }
+
+# impute stations coordinates from station_coord_reference to data they arre below precision_threshold
+impute_coordinates <- function(data, station_coord_reference, precision_threshold) {
+  data <- data %>%
+    left_join(station_coord_reference, by = c("start_station_name" = "station_name")) %>%
+    left_join(station_coord_reference, by = c("end_station_name" = "station_name"), suffix = c("_start", "_end"))
+  
+  # Step 2: Impute coordinates with less than precision_threshold
+  data <- data %>%
+    mutate(
+      start_lat = ifelse(
+        start_coord_precision < precision_threshold & !is.na(med_lat_start), 
+        add_randomness(med_lat_start),
+        start_lat
+      ),
+      start_lng = ifelse(
+        start_coord_precision < precision_threshold & !is.na(med_lng_start),
+        add_randomness(med_lng_start),
+        start_lng
+      ),
+      end_lat = ifelse(
+        end_coord_precision < precision_threshold & !is.na(med_lat_end),
+        add_randomness(med_lat_end),
+        end_lat
+      ),
+      end_lng = ifelse(
+        end_coord_precision < precision_threshold & !is.na(med_lng_end),
+        add_randomness(med_lng_end),
+        end_lng
+      )
+    )
+  
+  # Remove the extra columns that were created during the join if they are not needed
+  data <- data %>%
+    select(-matches("_start$|_end$"))
+  
+  return (data)
+}
+
 
 
 

@@ -149,7 +149,7 @@ Remove `trips` with trips shorter than 2 min, negative duration trips included
 trips$trip_duration <- as.numeric(trips$trip_duration)
 
 trips <- trips %>% 
-  filter(trip_duration > 2)
+  filter_and_report(trip_duration > 2)
 ```
 
 <br> 
@@ -178,7 +178,7 @@ NOTE: We use log10 scale here to gain a deeper understanding of those abnormal l
 Remove `docked_bikes` trips from our analysis
 ```{r}
 trips <- trips %>% 
-  filter(rideable_type != "docked_bike")
+  filter_and_report(rideable_type != "docked_bike")
 ```
 <br>
 
@@ -241,12 +241,19 @@ print(trip_summary)
 ```
 
 
-##### Explore NAs in Station Related Columns
+##### Explore NAs
 
 Let's get an update on NAs in our dataset
 ```{r}
 print(summarise_all(trips, ~sum(is.na(.))))
 ```
+
+We can remove rows with NAs in end coordinates. For how insignificant the amount is, we considered them noise. 
+```{r}
+trips <- trips %>% 
+  filter_and_report(!is.na(end_lat) & !is.na(end_lng))
+```
+
 
 After further research, we learned that classic bikes dock exclusively at Divvy stations whereas electric bikes can dock at non-Divvy stations or public fixtures. This difference might explain the missing station ids and names in our data.Below, we will explore NAs in station columns of the different ride types.  
 
@@ -284,15 +291,6 @@ ggplot(missing_station, aes(x = rideable_type)) +
 ```
 Our hypothesis is confirmed: the flexible return options for electric bikes are the primary cause of missing station IDs and names. These NA values are expected, therefore we will keep the rows with these NA values.  
 
-
-##### NAs in End Coordinates
-
-Now we can remove rows with NAs in end coordinates. See result below:
-```{r}
-trips <- trips %>% 
-  filter_and_report(!is.na(end_lat) & !is.na(end_lng))
-```
-
 ##### Imputation - Station Ids and Station Names
 For both start and end, station ids come in pairs with station name, thus their count should be the same. There is a very small difference between them in our data set. We will use our imputation function to fix this. and print the missing value summary to see the difference
 ```{r}
@@ -307,47 +305,15 @@ We can't improve the coordinate precision for those electric bike trips that eit
 
 first, let's see how many divvy station actually has precise coordinates within our data. We will begin by adding  columns to label the precision in the form of decimal places, from 1 to 5. and get a count of unique stations with a precision of 5 decimal point or more vs total unique station exist in our data set
 ```{r}
-trips <- trips %>% 
-  mutate(
-    start_coord_precision = get_max_precision_decimal(start_lat, start_lng),
-    end_coord_precision = get_max_precision_decimal(end_lat, end_lng)
-  )
+trips <- add_and_impute_coord_precisions(trips, 5)
 
-low_precision_count <- (
-  nrow(trips %>% filter(start_coord_precision < 5)) + 
-    nrow(trips %>% filter(end_coord_precision < 5))
-  )
-
-# Create a reference of unique stations with precision coordinates
-# ==============================================================================
-# Below code needs update and refactoring achieve its purpose: 
-
-# Create a subset for start stations and remove "start" prefix from selected columns
-start_stations <- trips %>% 
-  select(start_station_name, start_lat, start_lng, start_coord_precision) %>% 
-  filter(!is.na(start_station_name)) %>% 
-  rename(station_name = start_station_name,
-         lat = start_lat,
-         lng = start_lng,
-         coord_precision = start_coord_precision)
-
-# Create a subset for end stations and remove "end" prefix from all selected columns
-end_stations <- trips %>% 
-  select(end_station_name, end_lat, end_lng, end_coord_precision) %>% 
-  filter(!is.na(end_station_name)) %>% 
-  rename(station_name = end_station_name,
-         lat = end_lat,
-         lng = end_lng,
-         coord_precision = end_coord_precision)
-
-# Combine the two
-stations_combined <- bind_rows(start_stations, end_stations)
+# Combine all stations instances and remove their start and end prefix
+stations_combined <- combine_all_stations_instances(trips)
 
 # Create a subset of all unique stations regardless of coordinate precision 
 stations_unique <- distinct(stations_combined, station_name)
 
-# Keep only high precision coordinates (5 decimal places or higher)
-# Keep only median coordinates value while removing duplicated stations
+# Keep only the median value of 5 decimal places or higher coordinates
 stations_precise <- stations_combined %>% 
   filter(coord_precision >= 5) %>% 
   group_by(station_name) %>% 
@@ -356,8 +322,6 @@ stations_precise <- stations_combined %>%
 glue("Total unique stations: {nrow(stations_unique)}")
 glue("Stations with precise coordinates: {nrow(stations_precise)}")
 glue("Stations without precise coordinates: {nrow(stations_unique) - nrow(stations_precise)}")
-glue("Total low precision coordinates count, both start and end: {low_precision_count}")
-
 ```
 
 Before we move ahead with imputation, we must understand the potential impact and side effect of such operation. We will do so by investigating stations without precise coordinates.  
@@ -408,57 +372,24 @@ Considered % of these records represent as of the total number of records, we fe
 #### High Precision Coodindates Imputation 
 
 ```{r}
-# Step 1: Join the main set with the reference set
-trips <- trips %>%
-  left_join(stations_precise, by = c("start_station_name" = "station_name")) %>%
-  left_join(stations_precise, by = c("end_station_name" = "station_name"), suffix = c("_start", "_end"))
+# Let's keep a copy of the trips before imputation for comparison purpose
+trip_before_imputation <- trips
 
-# Step 2: Impute coordinates with less than 5 decimal precision
-trips <- trips %>%
-  mutate(
-    start_lat = ifelse(
-      start_coord_precision < 5 & !is.na(med_lat_start), 
-      add_randomness(med_lat_start),
-      start_lat
-    ),
-    start_lng = ifelse(
-      start_coord_precision < 5 & !is.na(med_lng_start),
-      add_randomness(med_lng_start),
-      start_lng
-    ),
-    end_lat = ifelse(
-      end_coord_precision < 5 & !is.na(med_lat_end),
-      add_randomness(med_lat_end),
-      end_lat
-    ),
-    end_lng = ifelse(
-      end_coord_precision < 5 & !is.na(med_lng_end),
-      add_randomness(med_lng_end),
-      end_lng
-    )
-  )
+# Imputate coordinates using station_precise when they precision are below 5 decimal point
+trips <- impute_coordinates(trips, stations_precise, 5)
 
-# Remove the extra columns that were created during the join if they are not needed
-trips <- trips %>%
-  select(-matches("_start$|_end$"))
+#Now let's re-impute the coordinate precision and compare before and after
+trips <- add_and_impute_coord_precisions(trips, 5)
+
+before_imputation <- count_lower_precision_coord(trip_before_imputation, 5)
+after_imputation <- count_lower_precision_coord(trips, 5)
+
+glue("count of improved coordinate precision:{before_imputation - after_imputation}")
+
+# remove dataset for one time comparison 
+rm(trip_before_imputation)
 ```
 
-
-Now let's re-impute the coordinate precision and compare before and after
-```{r}
-trips <- trips %>% 
-  mutate(
-    start_coord_precision = get_max_precision_decimal(start_lat, start_lng),
-    end_coord_precision = get_max_precision_decimal(end_lat, end_lng)
-  )
-
-low_precision_count <- (
-  nrow(trips %>% filter(start_coord_precision < 5)) + 
-    nrow(trips %>% filter(end_coord_precision < 5))
-  )
-
-glue("Total low precision coordinates count, both start and end: {low_precision_count}")
-```
 
 
 
