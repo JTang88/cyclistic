@@ -3,34 +3,41 @@ title: "Cyclistic - Cleaning & EDA"
 output: html_notebook
 ---
 
-This notebook document the data cleaning process for the Cyclistic Project.   
+This notebook documents the data cleaning and exploratory data analysis (EDA) process for the Cyclistic Project.
 
-Analysed Period: 2022/07/01 - 2023/06/30  
-Data Source: https://divvy-tripdata.s3.amazonaws.com/index.html  
+Analysed Period: July 1, 2022 - June 30, 2023  
+Data Source: https://divvy-tripdata.s3.amazonaws.com/index.html 
 
-If you are following along with the process in R notebook, visit the link above and download trip data of the Analysed Period and place them in the cyclystic/raw_data folder, and run the cyclystic/scripts/01_load_data.R. Then we are ready to beging.  
+To begin working with this process in the R notebook, please follow these steps:
+
+1. Visit the provided link and download the trip data for the Analysed Period
+2. Place the downloaded files in the 'cyclistic/data/raw' folder
+3. Execute the script 'cyclistic/scripts/00_init.R' to prepare the environment for analysis
+4. Execute the script 'cyclistic/scripts/01_load_data.R' to combine & export raw data into a single dataset 
+
+Once these preparatory steps are completed, you are ready to proceed with the project.
 
 ### 1. Data Preview
 
-First, import the combined raw data "trips_combined.csv"
+Import the combined raw data "trips_combined.csv":
 ```{r}
 trips <- read_csv("../data/interim/trips_combined.csv")
 ```
 <br>
 
-Let's see what our data looks like
+Preview of the first few rows of the trips dataset:
 ```{r}
 head(trips)
 ```
 <br>
 
-Now let's get NA count for each variable
+Obtain the count of NA values for each variable in the dataset:
 ```{r}
 print(summarise_all(trips, ~sum(is.na(.))))
 ```
 <br>
 
-Check for duplicates in `ride_id`. See result below:
+Determine if there are any duplicates by checking the `ride_id` column:
 ```{r}
 print(any(duplicated(trips$ride_id)))
 ```
@@ -39,7 +46,7 @@ print(any(duplicated(trips$ride_id)))
 
 ### 2. Initial Cleaning from Data Preview
 
-Extract "hour", "month", "weekday", and "trip duration" from from `started_at` and `ended_at`
+Extract "hour", "month", "weekday", and "trip duration" from from `started_at` and `ended_at`:
 ```{r}
 trips <- trips %>% 
   mutate(
@@ -51,37 +58,35 @@ trips <- trips %>%
 ```
 <br>
 
-station name and `member_causal` column have different capitalization, let's make relevant character columns lower case. 
+Make relevant character columns lower case: 
 ```{r}
 trips <- trips %>% 
   mutate(across(c(rideable_type, start_station_name, end_station_name), tolower))
 ```
 <br>
 
-Trim white spaces in character columns just in case
+Trim white spaces in character columns:
 ```{r}
 trips <- trips %>% mutate(across(where(is.character), trimws))
 ```
 <br>
 
-Make `rideable_type` and `member_casual` factors
+Make `rideable_type` and `member_casual` factors:
 ```{r}
 trips$member_casual <- as.factor(trips$member_casual)
 trips$rideable_type <- as.factor(trips$rideable_type)
 ```
 <br> 
 
-We will investigate these items in section 3. Exploratory Data Analysis.  
-- Station related columns all have around 15% NAs, suggesting a pattern rather than random.    
-- The consistency in the level of precision for coordinates related columns needs to be verified.
-- Handling NAs in `end_lat` and `end_lng`
+We will investigate the follwing items in section 3:  
+1. Station related columns all have around 15% NAs, suggesting a pattern rather than random  
+2. The consistency in the level of precision for coordinates related columns needs to be verified  
+3. Handling NAs in `end_lat` and `end_lng`
 
 ### 3. Variable Exploration
 <br>
 
 ##### Rideable Types & Trip Duration
-
-First, look at distribution
 ```{r, fig.width=8, fig.height=4}
 trip_duration_distribution_plot <- ggplot(trips, aes(x = trip_duration)) +
   geom_histogram(aes(fill = rideable_type), bins = 50, alpha = 0.7) +
@@ -112,7 +117,7 @@ trip_distribution_by_usertype_plot <- ggplot(trips, aes(x = rideable_type, fill 
 trip_duration_distribution_plot + trip_distribution_by_usertype_plot
 ```
 
-Basic statistically analysis:
+Perform basic statistical analysis on trip durations by rideable type:
 ```{r}
 trip_summary <- trips %>%
   group_by(rideable_type) %>%
@@ -369,8 +374,11 @@ All but one are electric bike rides. After view directly view these records, the
 
 Considered % of these records represent as of the total number of records, we feel it's sound to perform imputations. 
 
-#### High Precision Coodindates Imputation 
+#### High Precision Coodindates Imputation
 
+In the below code chuck, the trips dataset undergoes a process to improve the precision of its station coordinates. The first step uses the impute_coordinates function, which enhances the precision of coordinates with less than five decimal points. This function works by aligning the trips dataset with a reference dataset, stations_precise from earlier, which contains station coordinates with a precision of five decimal points or higher.
+
+The next step utilizes add_and_impute_coord_precisions function once again to recalculate and update the precision of start and end point coordinates in trips. 
 ```{r}
 # Let's keep a copy of the trips before imputation for comparison purpose
 trip_before_imputation <- trips
