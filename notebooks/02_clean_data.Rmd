@@ -17,7 +17,9 @@ To begin working with this process in the R notebook, please follow these steps:
 
 Once these preparatory steps are completed, you are ready to proceed with the project.
 
-### 1. Data Preview
+Disclaimer: In this analysis, some data is visualized using a log10 scale. It's important to note that while the log10 scale is effective for representing a wide range of values in a more compact and readable format, it can potentially distort the perception of the magnitude of differences between values. Therefore, caution should be exercised when interpreting relative sizes and differences in the data presented on this scale. It's designed to aid in identifying patterns and trends, particularly for data with large variances, but should not be used to draw direct quantitative comparisons.
+
+### Section 1 - Data Preview
 
 Import the combined raw data "trips_combined.csv":
 ```{r}
@@ -44,7 +46,7 @@ print(any(duplicated(trips$ride_id)))
 <br>
 
 
-### 2. Initial Cleaning from Data Preview
+### Section 2 - Initial Cleaning from Data Preview
 
 Extract "hour", "month", "weekday", and "trip duration" from from `started_at` and `ended_at`:
 ```{r}
@@ -78,14 +80,12 @@ trips$rideable_type <- as.factor(trips$rideable_type)
 ```
 <br> 
 
-We will investigate the follwing items in section 3:  
-1. Station related columns all have around 15% NAs, suggesting a pattern rather than random  
+Items need further investigation:  
+1. Station related columns all have around 15% NAs, suggesting a pattern rather than random noise  
 2. The consistency in the level of precision for coordinates related columns needs to be verified  
 3. Handling NAs in `end_lat` and `end_lng`
 
-### 3. Variable Exploration
-<br>
-
+### Section 3 - Variant Analysis
 ##### Rideable Types & Trip Duration
 ```{r, fig.width=8, fig.height=4}
 trip_duration_distribution_plot <- ggplot(trips, aes(x = trip_duration)) +
@@ -103,7 +103,7 @@ trip_duration_distribution_plot <- ggplot(trips, aes(x = trip_duration)) +
 
 trip_distribution_by_usertype_plot <- ggplot(trips, aes(x = rideable_type, fill = member_casual)) +
   geom_bar(position = "dodge") +
-  labs(title = "Count of Rideable Types by User Type - `member_causal`",
+  labs(title = "Count of Rideable Types by User Type",
        x = "Rideable Type",
        y = "Count") +
   theme_minimal() +
@@ -116,8 +116,12 @@ trip_distribution_by_usertype_plot <- ggplot(trips, aes(x = rideable_type, fill 
 
 trip_duration_distribution_plot + trip_distribution_by_usertype_plot
 ```
+We observed few anomalies from the graphs above that need further analysis:  
+1. Docked bike counts are significantly lower compared to the other two rideable types  
+2. All instances of docked type usage are associated with 'casual' user types  
+3. The range of trip durations is abnormally broad, extending into negative values at the lower end  
 
-Perform basic statistical analysis on trip durations by rideable type:
+We will perform a basic statistical analysis to find out the range of trip duration for each rideable types:
 ```{r}
 trip_summary <- trips %>%
   group_by(rideable_type) %>%
@@ -131,25 +135,20 @@ trip_summary <- trips %>%
 # Printing results
 print(trip_summary)
 ```
+As shown in the table above, there are negative trip durations in the classic_bike and electric_bike, suggesting data inaccuracies, and docked_bike shows abnormally long durations, skewing the overall data distribution.
 
-NOTES:
-Negative trip duration is not possible but they are detected in both `classic_bike` and `eletric_bike`. Extreme long duration occurs in docked_bike which significantly skews the data. Both discoveries need further investigation. 
-
-First, let's find out the percentage of negative duration trips exist in `classic_bike` and `eletric_bike`:
+Let's find out the percentage of negative duration trips exist in `classic_bike` and `eletric_bike`:
 ```{r}
 neg_duration_rates <- trips %>%
   group_by(rideable_type) %>%
   summarise(rate = mean(trip_duration <= 0) * 100) %>%
   pivot_wider(names_from = rideable_type, values_from = rate)
 
-print(glue("Percentage of negative duration in classic bike trips: {neg_duration_rates$classic_bike}%"))
-print(glue("Percentage of negative duration in electric bike trips: {neg_duration_rates$electric_bike}%"))
+print(glue("Negative duration in `classic_bike` trips: {neg_duration_rates$classic_bike}%
+           Negative duration in `electric_bike` trips: {neg_duration_rates$electric_bike}%" ))
 ```
 
-NOTES:
-The percentage of negative duration `classic_bike` and `eletric_bike` is considered insignificant. We'll treat them as noise and remove them from our dataset.
-
-Remove `trips` with trips shorter than 2 min, negative duration trips included
+We will remove the negative duration trips in `classic_bike` and `electric_bike` from our dataset, as they represent an insignificant percentage. Additionally, trips shorter than 2 minutes will also be excluded, assuming these are false starts:
 ```{r}
 trips$trip_duration <- as.numeric(trips$trip_duration)
 
@@ -157,13 +156,8 @@ trips <- trips %>%
   filter_and_report(trip_duration > 2)
 ```
 
-<br> 
+Next, we will re-examine "Trip Duration by Rideable Types", this time using a log10 scale to gain deeper insights into the previously observed anomalies:
 
-NOTE:
-`docked_type` count is significantly lower than other 2 `rideable_types` and 100% of docked bikes are ridden by "casual" user type.
-We will perform a bivariant analysis with just the "docked bike" `rideable_types` and `trip_duration` to gain a deeper understanding.
-
-Log scale histogram
 ```{r, fig.width=8, fig.height=4}
 ggplot(trips, aes(x = trip_duration)) +
   geom_histogram(aes(fill = rideable_type), bins = 50, alpha = 0.7) +
@@ -178,7 +172,7 @@ ggplot(trips, aes(x = trip_duration)) +
     legend.position = "bottom", 
   ) 
 ```
-NOTE: We use log10 scale here to gain a deeper understanding of those abnormal long duration trips, ensuring they are not just rare random occurrences. The amount of abnormal long duration true plus its significantly lower ride count discovered earlier indicating a pattern rather than noise. Confirmed with further research, we've concluded that docked_bikes are bikes taken out of circulation, and should be removed for the data set for the purpose of this analysis.   
+Extremely long durations, a significantly lower ride count, and exclusive usage by casual users are anomalies exclusively observed in docked bikes, collectively suggesting a consistent pattern rather than random noise. Upon further investigation, we determined that docked_bikes represent bikes taken out of circulation. Therefore, they will be excluded from our dataset for the purposes of this analysis.
 
 Remove `docked_bikes` trips from our analysis
 ```{r}
@@ -187,8 +181,7 @@ trips <- trips %>%
 ```
 <br>
 
-NOTE: Note that both X and Y axis are on free scale, and still show a significant difference in the ride duration range between the two. Also, due to our skewed the data is, we are not going to use the outlier formula here. We'll use information provided by divvy trips website, and common sense to make our best judgement and focus on the core patterns. Based on the cost for each ride type, it's unlikely that a rider keeping a trip for long duration, ex: 5 hrs to 24 hrs on purpose since its get expensive. let's again use the log10 y scale to look at the 2 bike type's of trip duration distribution and spot patterns.  
-
+We will use the log10 scale once again to delve deeper into the trip durations of classic and electric bikes, aiming to further refine our dataset: 
 ```{r, fig.width=8, fig.height=4}
 ggplot(trips, aes(x = trip_duration)) +
   geom_histogram(bins = 50, alpha = 0.7, color = "black") +
@@ -204,9 +197,9 @@ ggplot(trips, aes(x = trip_duration)) +
     legend.key.size = unit(7, "pt"),
   )
 ```
+In the classic bike graph, we observe a first-time directional change around the 531.25-minute mark, and around 350 minutes for electric bikes. Beyond these points, the majority of trips count fewer than 100, indicating a flattening trend. This may be due to bikes not being docked properly, leading to prolonged durations either from waiting to be docked correctly or being reused by other users. Additionally, a spike towards the end likely represents staff interventions for docking previously undocked bikes on a schedule. To better reflect typical user behavior, we will exclude trips exceeding these duration markers from our dataset. 
 
-NOTE: It's a log10 scale, so don't the graph miss lead you and pay attention to he 10 label on the y axis(count), We can see the first time a directional change is at around 531.25 min mark in the classic bike graph and 350 min mark which majority of the count are below a 100 at this point, and the trend start to flatten. We think this is attribute to bikes that were not docked properly earlier, either setting there waiting to be docked properly used again by other users, both resulted in the continuation of the duration, We also see a bike at the very end, this is likely due to the staff docking the the preciously not docking bike following schedule. We will remove trips longer than these two markers from our dataset. Though, they only represent a very small percentage of the dataset, our data should better refect the normal user behavior as a result. 
-
+Although these longer trips constitute a small fraction of our data, their removal should enhance the accuracy in representing normal usage patterns:
 ```{r}
 trips <- trips %>%
   filter_and_report(
@@ -215,7 +208,7 @@ trips <- trips %>%
   )
 ```
 
-Finally, let's look at our distribution once again after it's been cleaned up 
+Finally, let's look trip duration distribution once again after it's been cleaned up: 
 ```{r, fig.width=8, fig.height=4}
 ggplot(trips, aes(x = trip_duration)) +
   geom_histogram(aes(fill = rideable_type), bins = 50, alpha = 0.7) +
@@ -246,7 +239,7 @@ print(trip_summary)
 ```
 
 
-##### Explore NAs
+##### Exploring NAs
 
 Let's get an update on NAs in our dataset
 ```{r}
@@ -262,7 +255,7 @@ trips <- trips %>%
 
 After further research, we learned that classic bikes dock exclusively at Divvy stations whereas electric bikes can dock at non-Divvy stations or public fixtures. This difference might explain the missing station ids and names in our data.Below, we will explore NAs in station columns of the different ride types.  
 
-The Bar Char Represention
+The Bar Char Representation
 ```{r, fig.width=8, fig.height=4}
 missing_station <- trips %>% 
   filter(
@@ -296,7 +289,8 @@ ggplot(missing_station, aes(x = rideable_type)) +
 ```
 Our hypothesis is confirmed: the flexible return options for electric bikes are the primary cause of missing station IDs and names. These NA values are expected, therefore we will keep the rows with these NA values.  
 
-##### Imputation - Station Ids and Station Names
+### Section 4 - Imputation
+##### Station Ids and Station Names
 For both start and end, station ids come in pairs with station name, thus their count should be the same. There is a very small difference between them in our data set. We will use our imputation function to fix this. and print the missing value summary to see the difference
 ```{r}
 trips <- impute_from_pair(trips, "start_station_name", "start_station_id")
@@ -305,7 +299,7 @@ print(summarise_all(trips, ~sum(is.na(.))))
 ```
 
 
-##### Start & End Coordinates Precision Analysis
+##### Start & End Coordinates Precision
 We can't improve the coordinate precision for those electric bike trips that either didn't start or end at a divvy station since there is no reference to a higher precision coordinates within our data. However, for trips that did start or end at a divvy bike station, through internal imputation, the accuracy can potentially be improved at scale. 
 
 first, let's see how many divvy station actually has precise coordinates within our data. We will begin by adding  columns to label the precision in the form of decimal places, from 1 to 5. and get a count of unique stations with a precision of 5 decimal point or more vs total unique station exist in our data set
