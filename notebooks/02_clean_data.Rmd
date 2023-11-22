@@ -12,7 +12,7 @@ To begin working with this process in the R notebook, please follow these steps:
 
 1. Visit the provided link and download the trip data for the Analysed Period
 2. Place the downloaded files in the 'cyclistic/data/raw' folder
-3. Execute the script 'cyclistic/scripts/00_init.R' to prepare the environment for analysis
+3. Execute the script 'cyclistic/scripts/00_init_packages.R' to prepare the environment for analysis
 4. Execute the script 'cyclistic/scripts/01_load_data.R' to combine & export raw data into a single dataset 
 
 Once these preparatory steps are completed, you are ready to proceed with the project.
@@ -25,25 +25,21 @@ Import the combined raw data "trips_combined.csv":
 ```{r}
 trips <- read_csv("../data/interim/trips_combined.csv")
 ```
-<br>
 
 Preview of the first few rows of the trips dataset:
 ```{r}
 head(trips)
 ```
-<br>
 
 Obtain the count of NA values for each variable in the dataset:
 ```{r}
 print(summarise_all(trips, ~sum(is.na(.))))
 ```
-<br>
 
 Determine if there are any duplicates by checking the `ride_id` column:
 ```{r}
 print(any(duplicated(trips$ride_id)))
 ```
-<br>
 
 
 ### Section 2 - Initial Cleaning from Data Preview
@@ -58,27 +54,23 @@ trips <- trips %>%
     trip_duration = difftime(ended_at, started_at, units = "mins")
   )
 ```
-<br>
 
-Make relevant character columns lower case: 
+Make selected character columns lower case: 
 ```{r}
 trips <- trips %>% 
   mutate(across(c(rideable_type, start_station_name, end_station_name), tolower))
 ```
-<br>
 
 Trim white spaces in character columns:
 ```{r}
 trips <- trips %>% mutate(across(where(is.character), trimws))
 ```
-<br>
 
 Make `rideable_type` and `member_casual` factors:
 ```{r}
 trips$member_casual <- as.factor(trips$member_casual)
 trips$rideable_type <- as.factor(trips$rideable_type)
 ```
-<br> 
 
 Items need further investigation:  
 1. Station related columns all have around 15% NAs, suggesting a pattern rather than random noise  
@@ -135,7 +127,7 @@ trip_summary <- trips %>%
 # Printing results
 print(trip_summary)
 ```
-As shown in the table above, there are negative trip durations in the classic_bike and electric_bike, suggesting data inaccuracies, and docked_bike shows abnormally long durations, skewing the overall data distribution.
+As shown in the table above, there are negative trip durations in the classic bike and electric bike, suggesting data inaccuracies, and docked bike shows abnormally long durations, skewing the overall data distribution.
 
 Let's find out the percentage of negative duration trips exist in `classic_bike` and `eletric_bike`:
 ```{r}
@@ -172,16 +164,16 @@ ggplot(trips, aes(x = trip_duration)) +
     legend.position = "bottom", 
   ) 
 ```
-Extremely long durations, a significantly lower ride count, and exclusive usage by casual users are anomalies exclusively observed in docked bikes, collectively suggesting a consistent pattern rather than random noise. Upon further investigation, we determined that docked_bikes represent bikes taken out of circulation. Therefore, they will be excluded from our dataset for the purposes of this analysis.
+Extremely long durations, a significantly lower ride count, and exclusive usage by casual users are anomalies exclusively observed in docked bikes, collectively suggesting a pattern rather than random noise. Upon further investigation, we determined that docked bikes represent bikes taken out of circulation. Therefore, they will be excluded from our dataset for the purposes of this analysis.
 
-Remove `docked_bikes` trips from our analysis
+Remove `docked_bike` trips from our analysis:
 ```{r}
 trips <- trips %>% 
   filter_and_report(rideable_type != "docked_bike")
 ```
 <br>
 
-We will use the log10 scale once again to delve deeper into the trip durations of classic and electric bikes, aiming to further refine our dataset: 
+We will use the log10 scale once again to delve deeper into the trip durations distribution of classic and electric bikes, aiming to further refine our dataset: 
 ```{r, fig.width=8, fig.height=4}
 ggplot(trips, aes(x = trip_duration)) +
   geom_histogram(bins = 50, alpha = 0.7, color = "black") +
@@ -208,7 +200,7 @@ trips <- trips %>%
   )
 ```
 
-Finally, let's look trip duration distribution once again after it's been cleaned up: 
+Finally, let's visualize the trip duration distribution once again after it's been cleaned up: 
 ```{r, fig.width=8, fig.height=4}
 ggplot(trips, aes(x = trip_duration)) +
   geom_histogram(aes(fill = rideable_type), bins = 50, alpha = 0.7) +
@@ -223,7 +215,7 @@ ggplot(trips, aes(x = trip_duration)) +
     legend.position = "bottom", 
   )
 ```
-Trip Duration Summary
+Trip Duration Statisitcal Summary:
 ```{r}
 trip_summary <- trips %>%
   group_by(rideable_type) %>%
@@ -241,21 +233,20 @@ print(trip_summary)
 
 ##### Exploring NAs
 
-Let's get an update on NAs in our dataset
+Let's get an update on NAs in our dataset:
 ```{r}
 print(summarise_all(trips, ~sum(is.na(.))))
 ```
 
-We can remove rows with NAs in end coordinates. For how insignificant the amount is, we considered them noise. 
+For how insignificant the amount is, we can simply remove rows with NAs in end coordinates: 
 ```{r}
 trips <- trips %>% 
   filter_and_report(!is.na(end_lat) & !is.na(end_lng))
 ```
 
+After further research, we learned that classic bikes dock exclusively at Divvy stations whereas electric bikes can dock at non-Divvy stations or public fixtures. This difference might explain the missing station ids and names in our data. 
 
-After further research, we learned that classic bikes dock exclusively at Divvy stations whereas electric bikes can dock at non-Divvy stations or public fixtures. This difference might explain the missing station ids and names in our data.Below, we will explore NAs in station columns of the different ride types.  
-
-The Bar Char Representation
+Below, we will visualize records with any NA in station related columns: 
 ```{r, fig.width=8, fig.height=4}
 missing_station <- trips %>% 
   filter(
@@ -268,15 +259,15 @@ missing_station <- trips %>%
 ggplot(missing_station, aes(x = rideable_type)) +
   geom_bar(position = "dodge") +
   geom_text(
-    aes(label = ..count..), 
+    aes(label = after_stat(count)), 
     stat = 'count', 
     position = position_dodge(width = 0.9), 
     vjust = -0.25
   ) +
   labs(
-    title = "Count of Missing Station Info",
+    title = "Records with Missing Station Info",
     x = "Rideable Type",
-    y = "NA Count"
+    y = "Count"
   ) +
   scale_y_continuous(labels = comma) +
   theme_minimal() +
@@ -287,22 +278,24 @@ ggplot(missing_station, aes(x = rideable_type)) +
     legend.position = "bottom"
   )
 ```
-Our hypothesis is confirmed: the flexible return options for electric bikes are the primary cause of missing station IDs and names. These NA values are expected, therefore we will keep the rows with these NA values.  
+Our hypothesis is confirmed: the flexible return options for electric bikes are the primary cause of missing station IDs and names, leading to a predominance of electric bike records. Given that these NA values are anticipated in our analysis, we will retain the rows containing them. 
 
 ### Section 4 - Imputation
 ##### Station Ids and Station Names
-For both start and end, station ids come in pairs with station name, thus their count should be the same. There is a very small difference between them in our data set. We will use our imputation function to fix this. and print the missing value summary to see the difference
+For both start and end, station ids come in pairs with station name, thus their count should be the same. However, there is a very small difference between them in our data set.
+
+We will use our imputation function to fix this. and print the missing value summary to see the difference:
 ```{r}
 trips <- impute_from_pair(trips, "start_station_name", "start_station_id")
 trips <- impute_from_pair(trips, "end_station_name", "end_station_id")
 print(summarise_all(trips, ~sum(is.na(.))))
 ```
+Now, for every station id, there is a station name. 
 
-
-##### Start & End Coordinates Precision
+##### Impute Start & End Coordinates Precision Level
 We can't improve the coordinate precision for those electric bike trips that either didn't start or end at a divvy station since there is no reference to a higher precision coordinates within our data. However, for trips that did start or end at a divvy bike station, through internal imputation, the accuracy can potentially be improved at scale. 
 
-first, let's see how many divvy station actually has precise coordinates within our data. We will begin by adding  columns to label the precision in the form of decimal places, from 1 to 5. and get a count of unique stations with a precision of 5 decimal point or more vs total unique station exist in our data set
+First, let's see how many divvy station actually has precise coordinates within our data. We will begin by adding  a column to label the precision in the form of decimal places, from 1 to 5, using our `add_and_impute_coord_precisions` function, and get a count of unique stations with a precision of 5 decimal point or more vs total unique station exist in our data set:
 ```{r}
 trips <- add_and_impute_coord_precisions(trips, 5)
 
@@ -318,14 +311,14 @@ stations_precise <- stations_combined %>%
   group_by(station_name) %>% 
   summarise(med_lat = median(lat), med_lng = median(lng))
 
-glue("Total unique stations: {nrow(stations_unique)}")
-glue("Stations with precise coordinates: {nrow(stations_precise)}")
-glue("Stations without precise coordinates: {nrow(stations_unique) - nrow(stations_precise)}")
+glue("Total unique stations: {nrow(stations_unique)} 
+     Stations with precise coordinates: {nrow(stations_precise)}
+     Stations without precise coordinates: {nrow(stations_unique) - nrow(stations_precise)}")
 ```
 
-Before we move ahead with imputation, we must understand the potential impact and side effect of such operation. We will do so by investigating stations without precise coordinates.  
+Before we move ahead with imputation, we must understand the potential impact and side effect of such operation. We will do so by investigating those stations that are without precise coordinates.  
 
-Let's first see how many trips are associated with these stations
+Let's first see how many trips are associated with these stations:
 ```{r}
 # Identify station without imprecise coordinates
 stations_imprecise <- setdiff(
@@ -343,7 +336,7 @@ trips_stations_imprecise <- trips %>%
 glue("Trips associated with stations without precise coordinates: {nrow(trips_stations_imprecise)}")
 ```
 
-The count is minimal, but we'll dive in a little deeper to spot any patterns.  
+The count is minimal, but we'll visualize these imprecise trips by rideable types to spot any patterns:  
 ```{r}
 ggplot(trips_stations_imprecise, aes(x = rideable_type, fill = member_casual)) +
   geom_bar(position = "dodge") +
@@ -364,15 +357,12 @@ ggplot(trips_stations_imprecise, aes(x = rideable_type, fill = member_casual)) +
     legend.position = "bottom", 
     )
 ```
-All but one are electric bike rides. After view directly view these records, the only classic bike ride appears to have been returned to an incorrect station, given its end station name is "oh charging stx - test". This observation strengthens our hypothesis, especially since many station names have the prefix "public rack". The higher count of casual users here might be due to their unfamiliarity with the locations of divvy stations. 
+As shown in the graph above, all but one are electric bike rides. After directly viewing these records, the only classic bike ride appears to have been returned to an incorrect station, given its end station name is "oh charging stx - test". This observation strengthens our findings, especially since many station names have the prefix "public rack". The higher count of casual users here might be due to their unfamiliarity with the locations of divvy stations. 
 
-Considered % of these records represent as of the total number of records, we feel it's sound to perform imputations. 
+Considering that these records constitute only a small fraction of the total dataset, we are confident in moving forward with improving coordinate precision through internal imputation.
 
-#### High Precision Coodindates Imputation
-
-In the below code chuck, the trips dataset undergoes a process to improve the precision of its station coordinates. The first step uses the impute_coordinates function, which enhances the precision of coordinates with less than five decimal points. This function works by aligning the trips dataset with a reference dataset, stations_precise from earlier, which contains station coordinates with a precision of five decimal points or higher.
-
-The next step utilizes add_and_impute_coord_precisions function once again to recalculate and update the precision of start and end point coordinates in trips. 
+#### Improve Coodindates Precision Through Internal Imputation
+In the below code chuck, the trips dataset undergoes a process to improve the precision of its station coordinates. The first step uses the `impute_coordinates` function, which enhances the precision of coordinates with less than five decimal points. This function works by aligning the trips dataset with a reference dataset, `stations_precise` from earlier, which contains station coordinates with a precision of five decimal points or higher. The next step utilizes `add_and_impute_coord_precisions` function once again to recalculate and update the precision of start and end point coordinates in trips: 
 ```{r}
 # Let's keep a copy of the trips before imputation for comparison purpose
 trip_before_imputation <- trips
@@ -390,6 +380,19 @@ glue("count of improved coordinate precision:{before_imputation - after_imputati
 
 # remove dataset for one time comparison 
 rm(trip_before_imputation)
+```
+
+
+#### Add Trip Distance (dist_distance) Column to Dataset 
+
+Next, we will use the `calculate_haversine_distance` function to compute the Haversine distance between the start and end coordinates. The resulting values will be stored in the `disp_distance` column:
+```{r}
+trips <- trips %>%
+  mutate(
+    disp_distance = calculate_haversine_distance(start_lat, start_lng, end_lat, end_lng),
+  )
+
+head(trips)
 ```
 
 

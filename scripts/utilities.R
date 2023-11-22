@@ -1,6 +1,4 @@
-# Write all utility functions here
-
-# The import script after initial data cleaning
+# The import script after initial EDA & cleaning 
 import_trips_factorize_variables <- function(file_path) {
   trips <- read_csv(file_path)
   trips$weekday <- factor(trips$weekday, levels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"), ordered = TRUE)
@@ -10,7 +8,6 @@ import_trips_factorize_variables <- function(file_path) {
   
   return(trips)
 }
-
 
 # A wrapped filter function that report outcome
 filter_and_report <- function(.data, ...) {
@@ -113,9 +110,7 @@ combine_all_stations_instances <- function(data) {
 }
 
 
-
-
-# Step 2: Function to add randomness to the 5th decimal place
+# Function to add randomness to the 5th decimal place
 add_randomness <- function(coordinate) {
   # Extract the integer part and the first four decimal places
   truncated_coordinate <- trunc(coordinate * 1e4) / 1e4
@@ -167,6 +162,35 @@ impute_coordinates <- function(data, station_coord_reference, precision_threshol
   return (data)
 }
 
+
+# Create function to calculate distance between coordinates
+calculate_haversine_distance <- function(start_lat, start_lng, end_lat, end_lng) {
+  # Radius of the Earth in kilometers
+  R <- 6371.0
+  
+  # Convert degrees to radians
+  deg2rad <- function(deg) {
+    return(deg * pi / 180)
+  }
+  
+  start_lat <- deg2rad(start_lat)
+  start_lng <- deg2rad(start_lng)
+  end_lat <- deg2rad(end_lat)
+  end_lng <- deg2rad(end_lng)
+  
+  # Differences in coordinates
+  d_lat <- end_lat - start_lat
+  d_lng <- end_lng - start_lng
+  
+  # Haversine formula
+  a <- sin(d_lat / 2)^2 + cos(start_lat) * cos(end_lat) * sin(d_lng / 2)^2
+  c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+  
+  # Distance in kilometers
+  distance <- R * c
+  
+  return(distance)
+}
 
 
 
